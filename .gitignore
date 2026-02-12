@@ -1,0 +1,15 @@
+logs
+*.log
+npm-debug.log*
+node_modules
+/.next/
+/out/
+coverage
+*.local
+*.tsbuildinfo
+next-env.d.ts
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+__pycache__
