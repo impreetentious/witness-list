@@ -8,6 +8,7 @@ coverage
 *.local
 *.tsbuildinfo
 next-env.d.ts
+CLAUDE.md
 .vscode/*
 !.vscode/extensions.json
 .idea
