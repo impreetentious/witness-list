@@ -1,11 +1,13 @@
 {
   "name": "witness-list",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Witness List — a zero-knowledge proof workshop. Build a claim, prove it, try to cheat.",
   "scripts": {
     "dev": "next dev",
+    "build": "next build",
     "start": "next start",
+    "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "lint": "oxlint",

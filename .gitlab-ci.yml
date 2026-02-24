@@ -1,0 +1,37 @@
+# GitLab CI — mirror of .github/workflows/ci.yml.
+# `pages` deploys the static export to GitLab Pages at
+# https://<namespace>.gitlab.io/<project>/ (BASE_PATH set accordingly).
+# For a custom domain or user/group site, set BASE_PATH: '' below.
+
+image: node:22.22.0
+
+cache:
+  key:
+    files:
+      - package-lock.json
+  paths:
+    - .npm/
+
+stages:
+  - check
+  - deploy
+
+check:
+  stage: check
+  script:
+    - npm ci --cache .npm --prefer-offline
+    # next build type-checks the whole project (tsconfig include covers zk/ and tests)
+    - BASE_PATH="/$CI_PROJECT_NAME" npm run build
+    - npm test
+
+pages:
+  stage: deploy
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+  script:
+    - npm ci --cache .npm --prefer-offline
+    - BASE_PATH="/$CI_PROJECT_NAME" npm run build
+    - mv out public
+  artifacts:
+    paths:
+      - public
