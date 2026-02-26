@@ -1,7 +1,7 @@
 {
   "name": "witness-list",
   "private": true,
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Witness List — a zero-knowledge proof workshop. Build a claim, prove it, try to cheat.",
   "scripts": {
     "dev": "next dev",
@@ -27,7 +27,7 @@
   },
   "devDependencies": {
     "@types/node": "^24.10.13",
-    "@types/react": "^19.2.13",
+    "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "fast-check": "^4.5.3",
     "oxlint": "^1.46.0",
