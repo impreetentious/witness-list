@@ -3,7 +3,9 @@
  * the pedagogical heart: nonzero remainder rows ARE "the equation that catches you".
  * M4. Gate Z6.
  */
+import { mul, twoAdicRoot } from '../field';
 import type { Fp } from '../field';
+import { evalAt, polyDivRem, vanishing } from '../poly';
 import type { Poly } from '../poly';
 
 export interface QuotientResult {
@@ -16,8 +18,28 @@ export interface QuotientResult {
 }
 
 export function buildQuotient(
-  _composed: Poly, // gate + PI + α·transition + α²·boundary
-  _n: number,
+  composed: Poly, // gate + PI + α·transition + α²·boundary
+  n: number,
 ): QuotientResult {
-  throw new Error('TODO(M4): divide by Z_H, split into 3 chunks');
+  if (!Number.isSafeInteger(n) || n < 1 || (n & (n - 1)) !== 0) {
+    throw new Error('quotient domain size must be a positive power of two');
+  }
+  const { q, r } = polyDivRem(composed, vanishing(n));
+  const omega = twoAdicRoot(Math.log2(n));
+  const remainderOnH = new Array<Fp>(n);
+  let point = 1n;
+  for (let row = 0; row < n; row++) {
+    remainderOnH[row] = evalAt(r, point);
+    point = mul(point, omega);
+  }
+
+  // v1's unblinded composition has degree below 3n. The later prover adds its
+  // documented blinding slack before committing these same positional chunks.
+  return {
+    tLo: q.slice(0, n),
+    tMid: q.slice(n, 2 * n),
+    tHi: q.slice(2 * n, 3 * n),
+    remainderOnH,
+    exact: r.length === 0,
+  };
 }

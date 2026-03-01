@@ -18,10 +18,16 @@ import {
   sub,
   twoAdicRoot,
 } from '../field';
+import type { Fp } from '../field';
 import { cosetLDE, interpolate, intt, ntt } from '../ntt';
 import { evalAt, lagrangeAt, polyAdd, polyDivRem, polyMul, vanishing } from '../poly';
 import { buildTree, verifyPath } from '../merkle';
 import { createTranscript } from '../transcript';
+import { compile, generateWitness } from '../circuit/compile';
+import { validate } from '../circuit/ir';
+import { pythagorean } from '../circuit/presets/pythagorean';
+import { buildGrandProduct } from '../plonk/permutation';
+import { buildQuotient } from '../plonk/quotient';
 
 const fpArb = fc.bigInt({ min: 0n, max: P - 1n });
 const fpNonZeroArb = fc.bigInt({ min: 1n, max: P - 1n });
@@ -192,13 +198,94 @@ describe('M2 gates — Merkle commitments & Fiat–Shamir transcript', () => {
 });
 
 describe('M3 gates — arithmetization', () => {
-  it.todo('Z5: 4-row copy case telescopes Z to 1; one broken copy ⇒ Z(end) ≠ 1');
+  it('compiles deterministic PLONK rows and preserves the non-propagating tamper hook', async () => {
+    const compiled = await compile(pythagorean);
+    expect(compiled.n).toBe(32);
+    expect(compiled.publicRows).toBe(1);
+    expect(compiled.qL[0]).toBe(1n);
+    expect(compiled.qO[1]).toBe(P - 1n); // a² output row
+    expect(compiled.digest).toHaveLength(32);
+    expect(new Set(compiled.sigma)).toHaveLength(3 * compiled.n);
+
+    const inputs = new Map([[1, 5n], [2, 3n], [3, 4n]]);
+    const honest = generateWitness(pythagorean, inputs);
+    expect(honest.c[1]).toBe(9n);
+    expect(honest.c[7]).toBe(0n); // final a² + b² − c² row
+
+    const tampered = generateWitness(pythagorean, inputs, new Map([[4, 10n]]));
+    expect(tampered.c[1]).toBe(10n); // overridden a²
+    expect(tampered.c[7]).toBe(0n); // downstream sum is intentionally not recomputed
+  });
+
+  it('rejects cycles, dangling wires, and use of an assertion as an output wire', () => {
+    expect(
+      validate({
+        name: 'invalid',
+        gates: [
+          { id: 1, op: 'add', inputs: [2, 3] },
+          { id: 2, op: 'add', inputs: [1, 3] },
+          { id: 3, op: 'assert0', inputs: [1] },
+          { id: 4, op: 'add', inputs: [3, 99] },
+        ],
+        publicOrder: [],
+      }).map((issue) => issue.kind),
+    ).toEqual(expect.arrayContaining(['cycle', 'assert-output', 'dangling']));
+  });
+
+  it('Z5: 4-row copy case telescopes Z to 1; one broken copy ⇒ Z(end) ≠ 1', () => {
+    const n = 4;
+    const sigma = Uint32Array.from({ length: 3 * n }, (_, slot) => slot);
+    sigma[0] = n + 1; // a₀ and b₁ are two occurrences of one wire
+    sigma[n + 1] = 0;
+    const compiled = {
+      n,
+      qL: Array<Fp>(n).fill(0n), qR: Array<Fp>(n).fill(0n), qO: Array<Fp>(n).fill(0n),
+      qM: Array<Fp>(n).fill(0n), qC: Array<Fp>(n).fill(0n),
+      sigma,
+      publicRows: 0,
+      digest: new Uint8Array(32),
+      rows: Array.from({ length: n }, () => ({ a: null, b: null, c: null })),
+    };
+    const honest = {
+      a: [9n, 0n, 0n, 0n],
+      b: [0n, 9n, 0n, 0n],
+      c: [0n, 0n, 0n, 0n],
+    };
+    expect(buildGrandProduct(compiled, honest, 123n, 456n).partials.at(-1)).toBe(1n);
+
+    const broken = { ...honest, b: [0n, 10n, 0n, 0n] };
+    expect(buildGrandProduct(compiled, broken, 123n, 456n).partials.at(-1)).not.toBe(1n);
+  });
   it.todo('Z11: MiMC(0)=4624267046282251639, MiMC(1)=12880888997231784420, MiMC(123456789)=13938363197871553720');
   it.todo('compiled row counts (pythagorean 2^5, sudoku 2^8, mimc 2^8, age 2^5)');
 });
 
 describe('M4/M5 gates — protocol', () => {
-  it.todo('Z6: honest witness ⇒ quotient remainder 0 on H; tampered cell ⇒ nonzero exactly at affected rows');
+  it('Z6: exact division yields zero remainder; a row-local violation identifies its row', () => {
+    const n = 8;
+    const honestComposition = polyMul([3n, 5n, 9n], vanishing(n));
+    const honest = buildQuotient(honestComposition, n);
+    expect(honest.exact).toBe(true);
+    expect(honest.remainderOnH).toEqual(Array<Fp>(n).fill(0n));
+
+    const omega = twoAdicRoot(3);
+    let rowZeroBasis = [1n];
+    let denominator = 1n;
+    for (let row = 1; row < n; row++) {
+      const point = pow(omega, BigInt(row));
+      rowZeroBasis = polyMul(rowZeroBasis, [neg(point), 1n]);
+      denominator = mul(denominator, neg(point));
+    }
+    rowZeroBasis = rowZeroBasis.map((coefficient) => mul(coefficient, inv(denominator)));
+    const tampered = buildQuotient(polyAdd(honestComposition, rowZeroBasis), n);
+    expect(tampered.exact).toBe(false);
+    expect(
+      tampered.remainderOnH
+        .map((value, row) => ({ value, row }))
+        .filter(({ value }) => value !== 0n)
+        .map(({ row }) => row),
+    ).toEqual([0]);
+  });
   it.todo('Z7: FRI fold property layer-by-layer for random low-degree polys');
   it.todo('Z8: E2E — 4 presets × 20 seeds prove→verify ok, all checks V1–V7 green');
   it.todo('Z9: NEGATIVE SUITE — A1→V2 fails, A2→V3 fails at expected query, A3 statistics (the product promise)');

@@ -23,8 +23,79 @@ export interface Circuit {
 export type ValidationIssue =
   | { kind: 'cycle'; gateIds: number[] }
   | { kind: 'arity'; gateId: number }
-  | { kind: 'dangling'; gateId: number; input: number };
+  | { kind: 'constant'; gateId: number }
+  | { kind: 'dangling'; gateId: number; input: number }
+  | { kind: 'duplicate'; gateId: number }
+  | { kind: 'public'; gateId: number }
+  | { kind: 'assert-output'; gateId: number; consumer: number };
 
-export function validate(_c: Circuit): ValidationIssue[] {
-  throw new Error('TODO(M3): toposort-based validation');
+const expectedArity: Record<GateOp, number> = {
+  pub: 0,
+  priv: 0,
+  const: 0,
+  add: 2,
+  mul: 2,
+  assert0: 1,
+};
+
+/** Validate graph shape before the compiler performs its deterministic toposort. */
+export function validate(c: Circuit): ValidationIssue[] {
+  const issues: ValidationIssue[] = [];
+  const gatesById = new Map<number, Gate>();
+  for (const gate of c.gates) {
+    if (gatesById.has(gate.id)) issues.push({ kind: 'duplicate', gateId: gate.id });
+    else gatesById.set(gate.id, gate);
+    if (gate.inputs.length !== expectedArity[gate.op]) issues.push({ kind: 'arity', gateId: gate.id });
+    if (gate.op === 'const' && gate.value === undefined) issues.push({ kind: 'constant', gateId: gate.id });
+  }
+
+  const publicIds = new Set<number>();
+  for (const gateId of c.publicOrder) {
+    if (publicIds.has(gateId) || gatesById.get(gateId)?.op !== 'pub') {
+      issues.push({ kind: 'public', gateId });
+    }
+    publicIds.add(gateId);
+  }
+  for (const gate of c.gates) {
+    if (gate.op === 'pub' && !publicIds.has(gate.id)) issues.push({ kind: 'public', gateId: gate.id });
+  }
+
+  for (const gate of c.gates) {
+    for (const input of gate.inputs) {
+      const producer = gatesById.get(input);
+      if (producer === undefined) issues.push({ kind: 'dangling', gateId: gate.id, input });
+      else if (producer.op === 'assert0') {
+        // An assert row has no constrained output slot. Treat it as a terminal statement,
+        // rather than silently introducing an unconstrained wire into the circuit.
+        issues.push({ kind: 'assert-output', gateId: input, consumer: gate.id });
+      }
+    }
+  }
+
+  const state = new Map<number, 'visiting' | 'done'>();
+  const stack: number[] = [];
+  const seenCycles = new Set<string>();
+  function visit(gateId: number): void {
+    if (state.get(gateId) === 'done') return;
+    if (state.get(gateId) === 'visiting') {
+      const start = stack.indexOf(gateId);
+      const cycle = [...stack.slice(start), gateId];
+      const key = cycle.join(',');
+      if (!seenCycles.has(key)) {
+        issues.push({ kind: 'cycle', gateIds: cycle });
+        seenCycles.add(key);
+      }
+      return;
+    }
+    const gate = gatesById.get(gateId);
+    if (gate === undefined) return;
+    state.set(gateId, 'visiting');
+    stack.push(gateId);
+    for (const input of gate.inputs) visit(input);
+    stack.pop();
+    state.set(gateId, 'done');
+  }
+  for (const gate of c.gates) visit(gate.id);
+
+  return issues;
 }

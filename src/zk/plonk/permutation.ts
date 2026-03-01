@@ -3,6 +3,7 @@
  * (the telescoping column the UI renders). M4.
  * Gate Z5: hand-built 4-row case telescopes to 1; one broken copy ⇒ Z(end) ≠ 1.
  */
+import { add, inv, mul, twoAdicRoot } from '../field';
 import type { Fp } from '../field';
 import type { CompiledCircuit, Witness } from '../circuit/compile';
 
@@ -16,11 +17,57 @@ export interface GrandProduct {
   partials: Fp[];
 }
 
+function slotPoint(slot: number, n: number, powers: Fp[]): Fp {
+  if (slot < n) return powers[slot]!;
+  if (slot < 2 * n) return mul(K1, powers[slot - n]!);
+  if (slot < 3 * n) return mul(K2, powers[slot - 2 * n]!);
+  throw new Error(`sigma references slot ${slot} outside 3n`);
+}
+
+function product3(a: Fp, b: Fp, c: Fp): Fp {
+  return mul(mul(a, b), c);
+}
+
 export function buildGrandProduct(
-  _cc: CompiledCircuit,
-  _w: Witness,
-  _beta: Fp,
-  _gamma: Fp,
+  cc: CompiledCircuit,
+  witness: Witness,
+  beta: Fp,
+  gamma: Fp,
 ): GrandProduct {
-  throw new Error('TODO(M4)');
+  const { n } = cc;
+  if ((n & (n - 1)) !== 0 || n < 1) throw new Error('grand product needs a power-of-two row domain');
+  if (witness.a.length !== n || witness.b.length !== n || witness.c.length !== n) {
+    throw new Error('witness dimensions do not match the compiled circuit');
+  }
+  if (cc.sigma.length !== 3 * n) throw new Error('sigma must map exactly 3n slots');
+
+  const omega = twoAdicRoot(Math.log2(n));
+  const powers = new Array<Fp>(n);
+  powers[0] = 1n;
+  for (let i = 1; i < n; i++) powers[i] = mul(powers[i - 1]!, omega);
+
+  const z = new Array<Fp>(n).fill(0n);
+  const partials = new Array<Fp>(n).fill(0n);
+  z[0] = 1n;
+  let running = 1n;
+  for (let row = 0; row < n; row++) {
+    const idA = powers[row]!;
+    const idB = mul(K1, idA);
+    const idC = mul(K2, idA);
+    const numerator = product3(
+      add(add(witness.a[row]!, mul(beta, idA)), gamma),
+      add(add(witness.b[row]!, mul(beta, idB)), gamma),
+      add(add(witness.c[row]!, mul(beta, idC)), gamma),
+    );
+    const denominator = product3(
+      add(add(witness.a[row]!, mul(beta, slotPoint(cc.sigma[row]!, n, powers))), gamma),
+      add(add(witness.b[row]!, mul(beta, slotPoint(cc.sigma[n + row]!, n, powers))), gamma),
+      add(add(witness.c[row]!, mul(beta, slotPoint(cc.sigma[2 * n + row]!, n, powers))), gamma),
+    );
+    if (denominator === 0n) throw new Error(`grand product denominator is zero at row ${row}`);
+    running = mul(running, mul(numerator, inv(denominator)));
+    partials[row] = running;
+    if (row + 1 < n) z[row + 1] = running;
+  }
+  return { z, partials };
 }
