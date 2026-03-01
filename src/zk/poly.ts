@@ -19,6 +19,17 @@ export function polyAdd(a: Poly, b: Poly): Poly {
   return trim(out);
 }
 
+export function polyScale(p: Poly, scalar: Fp): Poly {
+  if (scalar === 0n || p.length === 0) return [];
+  return trim(p.map((coefficient) => mul(coefficient, scalar)));
+}
+
+export function polySub(a: Poly, b: Poly): Poly {
+  const out = new Array<Fp>(Math.max(a.length, b.length)).fill(0n);
+  for (let i = 0; i < out.length; i++) out[i] = sub(a[i] ?? 0n, b[i] ?? 0n);
+  return trim(out);
+}
+
 /** Coefficient-form multiplication. Workshop circuits stay small enough for schoolbook multiplication. */
 export function polyMul(a: Poly, b: Poly): Poly {
   if (a.length === 0 || b.length === 0) return [];
