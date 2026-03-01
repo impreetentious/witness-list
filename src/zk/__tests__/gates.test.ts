@@ -18,6 +18,10 @@ import {
   sub,
   twoAdicRoot,
 } from '../field';
+import { cosetLDE, interpolate, intt, ntt } from '../ntt';
+import { evalAt, lagrangeAt, polyAdd, polyDivRem, polyMul, vanishing } from '../poly';
+import { buildTree, verifyPath } from '../merkle';
+import { createTranscript } from '../transcript';
 
 const fpArb = fc.bigInt({ min: 0n, max: P - 1n });
 const fpNonZeroArb = fc.bigInt({ min: 1n, max: P - 1n });
@@ -85,9 +89,106 @@ describe('Z2: fixed vectors (independently computed)', () => {
 });
 
 describe('M1 gates — poly & NTT', () => {
-  it.todo('Z3: iNTT∘NTT = id for n = 2..2^13; NTT matches naive DFT for n ≤ 64');
-  it.todo('Z4: (f·g) div g exact; division round-trips; barycentric L_i(ζ) vs direct evaluation');
-  it.todo('M1 bench: coset LDE of 2^13 coeffs < 100 ms (performance budget)');
+  it('Z3: iNTT∘NTT = id for n = 2..2^13; NTT matches naive DFT for n ≤ 64', () => {
+    for (let logN = 1; logN <= 13; logN++) {
+      const n = 1 << logN;
+      const values = Array.from({ length: n }, (_, i) => BigInt((i + 1) * (logN + 3)));
+      expect(intt(ntt(values))).toEqual(values);
+      expect(interpolate(ntt(values))).toEqual(values);
+    }
+
+    for (const n of [2, 4, 8, 16, 32, 64]) {
+      const values = Array.from({ length: n }, (_, i) => BigInt(i * i + 3 * i + 1));
+      const omega = twoAdicRoot(Math.log2(n));
+      const expected = values.map((_, row) =>
+        values.reduce((sum, value, column) => add(sum, mul(value, pow(omega, BigInt(row * column)))), 0n),
+      );
+      expect(ntt(values)).toEqual(expected);
+    }
+  });
+
+  it('Z4: multiplication/division round-trip and barycentric L_i(ζ) match direct evaluation', () => {
+    fc.assert(
+      fc.property(
+        fc.array(fpArb, { minLength: 0, maxLength: 12 }),
+        fc.array(fpArb, { minLength: 0, maxLength: 12 }),
+        fpNonZeroArb,
+        fc.array(fpArb, { minLength: 0, maxLength: 6 }),
+        (q, divisorTail, divisorLead, remainderCoeffs) => {
+          const divisor = [...divisorTail, divisorLead];
+          const remainder = remainderCoeffs.slice(0, Math.max(0, divisor.length - 1));
+          const dividend = polyAdd(polyMul(q, divisor), remainder);
+          const result = polyDivRem(dividend, divisor);
+          expect(polyAdd(polyMul(result.q, divisor), result.r)).toEqual(dividend);
+          expect(result.r.length).toBeLessThan(divisor.length);
+        },
+      ),
+      { numRuns: 100 },
+    );
+
+    const n = 8;
+    const omega = twoAdicRoot(3);
+    const zeta = 7n;
+    for (let i = 0; i < n; i++) {
+      let basis = [1n];
+      let denominator = 1n;
+      const point = pow(omega, BigInt(i));
+      for (let j = 0; j < n; j++) {
+        if (j === i) continue;
+        const other = pow(omega, BigInt(j));
+        basis = polyMul(basis, [neg(other), 1n]);
+        denominator = mul(denominator, sub(point, other));
+      }
+      const direct = mul(evalAt(basis, zeta), inv(denominator));
+      expect(lagrangeAt(i, n, zeta)).toBe(direct);
+      expect(evalAt(vanishing(n), zeta)).toBe(sub(pow(zeta, 8n), 1n));
+    }
+  });
+
+  it('M1 bench: coset LDE of 2^13 coeffs < 100 ms', () => {
+    const coeffs = Array.from({ length: 1 << 13 }, (_, i) => BigInt(i + 1));
+    const startedAt = performance.now();
+    const evaluations = cosetLDE(coeffs, 8);
+    const elapsedMs = performance.now() - startedAt;
+    expect(evaluations).toHaveLength(1 << 16);
+    expect(elapsedMs).toBeLessThan(100);
+  });
+});
+
+describe('M2 gates — Merkle commitments & Fiat–Shamir transcript', () => {
+  it('Merkle paths bind the domain-separated leaf index and composite field leaf', async () => {
+    const leaves = Array.from({ length: 8 }, (_, i) => [BigInt(i + 1), BigInt((i + 1) ** 2)]);
+    const tree = await buildTree(leaves, 'wires');
+    expect(tree.depth).toBe(3);
+
+    for (let i = 0; i < leaves.length; i++) {
+      expect(await verifyPath(tree.root, leaves[i]!, tree.path(i), 'wires')).toBe(true);
+    }
+
+    expect(await verifyPath(tree.root, [999n, 1n], tree.path(3), 'wires')).toBe(false);
+    expect(await verifyPath(tree.root, leaves[3]!, tree.path(3), 'different-domain')).toBe(false);
+  });
+
+  it('Fiat–Shamir transcript replays byte-for-byte and domain separates challenges', async () => {
+    async function replay(label: string) {
+      const transcript = createTranscript('witness-list/v1');
+      await transcript.absorb('params', new Uint8Array([32, 8, 32]));
+      await transcript.absorbFp('public-input', 5n);
+      const beta = await transcript.squeezeFp(label);
+      const index = await transcript.squeezeIndex('query-index', 4096);
+      return { beta, index, log: transcript.log };
+    }
+
+    const first = await replay('beta');
+    const second = await replay('beta');
+    const differentLabel = await replay('gamma');
+    expect(first).toEqual(second);
+    expect(first.beta).not.toBe(differentLabel.beta);
+    expect(first.beta).toBeGreaterThanOrEqual(0n);
+    expect(first.beta).toBeLessThan(P);
+    expect(first.index).toBeGreaterThanOrEqual(0);
+    expect(first.index).toBeLessThan(4096);
+  });
 });
 
 describe('M3 gates — arithmetization', () => {
