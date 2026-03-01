@@ -31,8 +31,19 @@ export interface QueryOpening {
   /** composite wire leaf (a,b,c) + Z + t-chunk leaves at index (and FRI sibling positions) */
   leaves: Record<string, Fp[]>;
   paths: Record<string, MerklePath>;
-  /** per FRI layer: opened pair + path */
-  friLayers: { at: Fp; sibling: Fp; path: MerklePath }[];
+  /**
+   * Per non-final FRI layer, the canonical x/-x pair and both authenticated
+   * paths. A Merkle sibling hash is not an opening of the sibling value, so
+   * both paths are necessary for the fold check.
+   */
+  friLayers: {
+    at: Fp;
+    sibling: Fp;
+    atPath: MerklePath;
+    siblingPath: MerklePath;
+  }[];
+  /** Authenticated final-layer value, checked against the clear degree-<8 polynomial. */
+  finalLayer: { value: Fp; path: MerklePath };
 }
 
 export interface Proof {
