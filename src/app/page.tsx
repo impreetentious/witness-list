@@ -1,6 +1,11 @@
-// v0 scaffold shell. Replaced by the pipeline/canvas/inspector layout at M6–M7.
-// Interactive surfaces become client components ('use client');
-// the zk/ kernel stays framework-free.
+import { M4Preview } from './m4-preview';
+import { M5Preview } from './m5-preview';
+import { CircuitCanvas } from '@/canvas/circuit-canvas';
+import { ProtocolPlayer } from '@/player/protocol-player';
+import { ZkPanel } from './zk-panel';
+
+// The complete pipeline/canvas/inspector layout lands at M6–M7.
+// The M4 preview remains deliberately labelled unsound-alone for comparison.
 export default function Home() {
   return (
     <main className="scaffold">
@@ -11,9 +16,14 @@ export default function Home() {
       <h1>Witness List</h1>
       <p>Build a claim, prove it, try to cheat.</p>
       <p className="mono">
-        v0 scaffold — field kernel implemented, gates in
-        src/zk/__tests__/
+        v0.1.10 — a teaching-scale DEEP/FRI kernel is locally verified. The full player,
+        canvas, sharing, and integrated ZK mode remain under construction.
       </p>
+      <M5Preview />
+      <CircuitCanvas />
+      <ProtocolPlayer />
+      <ZkPanel />
+      <M4Preview />
     </main>
   );
 }

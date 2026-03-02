@@ -1,3 +1,5 @@
+@import '@xyflow/react/dist/style.css';
+
 /* Design tokens */
 :root {
   --paper: #fbfaf7;
@@ -46,4 +48,460 @@ body {
   font-family: var(--font-mono);
   font-size: 0.8rem;
   opacity: 0.6;
+}
+
+.m4-preview,
+.m5-preview {
+  width: min(100%, 46rem);
+  margin-top: 2rem;
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+  padding: 1.5rem;
+  text-align: left;
+}
+
+.m4-preview h2,
+.m4-preview h3,
+.m5-preview h2 {
+  margin: 0.25rem 0 0.75rem;
+}
+
+.m4-preview h2,
+.m5-preview h2 {
+  font-size: 1.25rem;
+}
+
+.m4-preview h3 {
+  font-size: 0.875rem;
+  font-family: var(--font-mono);
+}
+
+.eyebrow {
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.m4-preview button {
+  border: 0;
+  background: var(--accent);
+  color: white;
+  cursor: pointer;
+  font: inherit;
+  padding: 0.65rem 0.9rem;
+}
+
+.m5-preview button {
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: white;
+  cursor: pointer;
+  font: inherit;
+  padding: 0.65rem 0.9rem;
+}
+
+.m5-preview button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.preview-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.caveat {
+  border-left: 2px solid var(--accent);
+  font-size: 0.9rem;
+  padding-left: 0.75rem;
+}
+
+.m4-preview button:disabled {
+  cursor: progress;
+  opacity: 0.65;
+}
+
+.warning,
+.failure {
+  color: var(--fail);
+}
+
+.pass {
+  color: var(--pass);
+}
+
+.preview-results {
+  display: grid;
+  gap: 1rem;
+  margin-top: 1.25rem;
+}
+
+.check-list {
+  display: grid;
+  gap: 0.35rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+}
+
+.check-list span {
+  display: inline-block;
+  min-width: 2.2rem;
+  font-weight: 700;
+}
+
+.circuit-workbench {
+  width: min(100%, 72rem);
+  margin-top: 2rem;
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+  padding: 1.25rem;
+  text-align: left;
+}
+
+.canvas-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.canvas-heading h2,
+.gate-palette h3 {
+  margin: 0.25rem 0 0.75rem;
+}
+
+.canvas-heading p {
+  max-width: 62ch;
+}
+
+.canvas-actions,
+.preview-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.canvas-actions button,
+.gate-palette button {
+  border: 1px solid var(--accent);
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+  font: inherit;
+  padding: 0.45rem 0.6rem;
+}
+
+.canvas-actions button:first-child {
+  background: var(--accent);
+  color: white;
+}
+
+.canvas-layout {
+  display: grid;
+  grid-template-columns: 12rem minmax(0, 1fr);
+  border-top: 1px solid color-mix(in srgb, var(--ink) 14%, transparent);
+  margin-top: 1rem;
+  min-height: 32rem;
+}
+
+.gate-palette {
+  display: grid;
+  align-content: start;
+  gap: 0.45rem;
+  border-right: 1px solid color-mix(in srgb, var(--ink) 14%, transparent);
+  padding: 1rem;
+}
+
+.gate-palette h3 {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+}
+
+.gate-palette button {
+  text-align: left;
+}
+
+.constant-editor {
+  display: grid;
+  gap: 0.35rem;
+  margin-top: 0.5rem;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+}
+
+.constant-editor input {
+  border: 1px solid color-mix(in srgb, var(--ink) 30%, transparent);
+  background: white;
+  color: var(--ink);
+  font: inherit;
+  min-width: 0;
+  padding: 0.45rem;
+}
+
+.flow-shell {
+  min-height: 32rem;
+}
+
+.flow-shell .react-flow {
+  background: color-mix(in srgb, var(--paper) 90%, var(--accent) 10%);
+}
+
+.gate-card {
+  min-width: 8rem;
+  border: 1px solid color-mix(in srgb, var(--ink) 40%, transparent);
+  background: var(--paper);
+  display: grid;
+  gap: 0.25rem;
+  padding: 0.65rem 0.75rem;
+}
+
+.gate-card.selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 20%, transparent);
+}
+
+.gate-card strong {
+  font-size: 0.875rem;
+}
+
+.gate-card small,
+.gate-op,
+.canvas-status {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+}
+
+.gate-op {
+  color: var(--accent);
+}
+
+.gate-assert0 {
+  border-color: var(--fail);
+}
+
+.canvas-status {
+  margin: 0.85rem 0 0;
+}
+
+.protocol-player {
+  width: min(100%, 64rem);
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+  margin-top: 2rem;
+  padding: 1.25rem;
+  text-align: left;
+}
+
+.player-heading {
+  align-items: flex-start;
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+}
+
+.player-heading h2,
+.stage-card h3 {
+  margin: 0.25rem 0 0.75rem;
+}
+
+.player-heading button,
+.player-controls button {
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: white;
+  cursor: pointer;
+  font: inherit;
+  padding: 0.55rem 0.75rem;
+}
+
+.player-controls button:disabled,
+.player-heading button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.stage-rail {
+  display: grid;
+  grid-template-columns: repeat(16, minmax(1.5rem, 1fr));
+  gap: 0.25rem;
+  margin: 1rem 0;
+}
+
+.stage-rail button {
+  border: 1px solid color-mix(in srgb, var(--ink) 25%, transparent);
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+  font-family: var(--font-mono);
+  padding: 0.35rem 0;
+}
+
+.stage-rail button.active {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: white;
+}
+
+.stage-card {
+  border-left: 2px solid var(--accent);
+  min-height: 14rem;
+  padding: 0.75rem 1rem;
+}
+
+.stage-card h3 {
+  font-size: 1rem;
+}
+
+.stage-math {
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+}
+
+.live-data {
+  display: grid;
+  gap: 0.4rem;
+  margin: 1rem 0 0;
+}
+
+.live-data div {
+  display: grid;
+  gap: 0.5rem;
+  grid-template-columns: minmax(7rem, 13rem) minmax(0, 1fr);
+}
+
+.live-data dt {
+  font-family: var(--font-mono);
+  font-weight: 700;
+}
+
+.live-data dd {
+  font-family: var(--font-mono);
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.player-controls {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+.player-controls label {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+}
+
+.share-status {
+  color: var(--pass);
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  margin: 0.85rem 0 0;
+}
+
+.zk-panel {
+  width: min(100%, 64rem);
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+  margin-top: 2rem;
+  padding: 1.25rem;
+  text-align: left;
+}
+
+.zk-panel h2 {
+  margin: 0.25rem 0 0.75rem;
+}
+
+.zk-panel button {
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: white;
+  cursor: pointer;
+  font: inherit;
+  padding: 0.55rem 0.75rem;
+}
+
+.zk-ledger {
+  display: grid;
+  gap: 0.45rem;
+  margin: 1rem 0;
+}
+
+.zk-ledger div {
+  display: grid;
+  gap: 0.5rem;
+  grid-template-columns: minmax(12rem, 16rem) minmax(0, 1fr);
+}
+
+.zk-ledger dt,
+.zk-ledger dd,
+.transcript-ledger {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+}
+
+.zk-ledger dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.transcript-ledger {
+  display: grid;
+  gap: 0.35rem;
+  list-style: none;
+  margin: 1rem 0 0;
+  padding: 0;
+}
+
+.transcript-ledger code {
+  color: var(--accent);
+}
+
+@media (max-width: 720px) {
+  .canvas-heading,
+  .canvas-layout {
+    display: block;
+  }
+
+  .canvas-actions {
+    margin-top: 0.75rem;
+  }
+
+  .gate-palette {
+    border-bottom: 1px solid color-mix(in srgb, var(--ink) 14%, transparent);
+    border-right: 0;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .gate-palette h3,
+  .constant-editor {
+    grid-column: 1 / -1;
+  }
+
+  .player-heading {
+    display: block;
+  }
+
+  .player-heading button {
+    margin-top: 0.75rem;
+  }
+
+  .stage-rail {
+    grid-template-columns: repeat(8, minmax(1.5rem, 1fr));
+  }
+
+  .live-data div {
+    grid-template-columns: 1fr;
+    gap: 0.1rem;
+  }
+
+  .zk-ledger div {
+    grid-template-columns: 1fr;
+    gap: 0.1rem;
+  }
 }
