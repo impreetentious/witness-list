@@ -78,9 +78,9 @@ export function foldPair(atX: Fp, atNegativeX: Fp, beta: Fp, x: Fp): Fp {
 }
 
 /**
- * Batch DEEP composition for the eight committed polynomial evaluations:
- * a, b, c, Z(x), Z(ωx), t_lo, t_mid, t_hi.  The matching claims are at
- * ζ, ζ, ζ, ζ, ωζ, ζ, ζ, ζ.
+ * Batch DEEP composition for every committed polynomial evaluation. The first
+ * five values are a, b, c, Z(x), Z(ωx); the remainder are positional quotient
+ * chunks. Blinded proofs can carry more than the three unblinded chunks.
  */
 export function deepCompositionAt(
   x: Fp,
@@ -89,8 +89,8 @@ export function deepCompositionAt(
   valuesAtX: readonly Fp[],
   claimedValues: readonly Fp[],
 ): Fp {
-  if (valuesAtX.length !== 8 || claimedValues.length !== 8) {
-    throw new Error('DEEP composition needs exactly eight committed evaluations');
+  if (valuesAtX.length < 8 || valuesAtX.length !== claimedValues.length) {
+    throw new Error('DEEP composition needs matching committed evaluations');
   }
   const denominator = sub(x, zeta);
   if (denominator === 0n) throw new Error('DEEP query point must differ from zeta');

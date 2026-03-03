@@ -32,7 +32,8 @@ function paramsBytes(params: Params): Uint8Array {
 }
 
 /** Deterministic mulberry32 lanes, joined into a field-sized teaching sample. */
-function seededFieldSource(seed: number): () => Fp {
+/** Deterministic prover-side source so a replay seed recreates the same proof. */
+export function seededFieldSource(seed: number): () => Fp {
   let state = seed >>> 0;
   const nextU32 = (): number => {
     state = (state + 0x6d2b79f5) >>> 0;

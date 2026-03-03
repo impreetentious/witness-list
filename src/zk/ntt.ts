@@ -64,12 +64,10 @@ export function intt(a: Fp[]): Fp[] {
   return values.map((value) => mul(value, nInv));
 }
 
-/** Evaluate coeffs on the coset g·⟨ω'⟩ of size n·blowup: scale coeffs by g^i, then NTT. */
-export function cosetLDE(coeffs: Fp[], blowup: number): Fp[] {
-  log2PowerOfTwo(coeffs.length, 'cosetLDE');
-  log2PowerOfTwo(blowup, 'cosetLDE blowup');
-  const domainSize = coeffs.length * blowup;
-  if (!Number.isSafeInteger(domainSize)) throw new Error('cosetLDE: domain too large');
+/** Evaluate coefficients on a chosen power-of-two coset domain. */
+export function cosetEvaluate(coeffs: Fp[], domainSize: number): Fp[] {
+  log2PowerOfTwo(domainSize, 'coset evaluation domain');
+  if (coeffs.length > domainSize) throw new Error('coset evaluation domain is smaller than the polynomial');
 
   const shifted = new Array<Fp>(domainSize).fill(0n);
   let generatorPower = 1n;
@@ -78,6 +76,15 @@ export function cosetLDE(coeffs: Fp[], blowup: number): Fp[] {
     generatorPower = mul(generatorPower, GENERATOR);
   }
   return ntt(shifted);
+}
+
+/** Evaluate coeffs on the coset g·⟨ω'⟩ of size n·blowup: scale coeffs by g^i, then NTT. */
+export function cosetLDE(coeffs: Fp[], blowup: number): Fp[] {
+  log2PowerOfTwo(coeffs.length, 'cosetLDE');
+  log2PowerOfTwo(blowup, 'cosetLDE blowup');
+  const domainSize = coeffs.length * blowup;
+  if (!Number.isSafeInteger(domainSize)) throw new Error('cosetLDE: domain too large');
+  return cosetEvaluate(coeffs, domainSize);
 }
 
 /** Interpolate values over H (size n) back to coefficients. */

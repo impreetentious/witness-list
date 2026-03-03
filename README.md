@@ -4,7 +4,7 @@
 
 In a trial, the *witness list* is the roster of testimony the parties will offer. In a zero-knowledge proof, the *witness* is the private input — the thing you know but won't reveal. Witness List is the workshop for both meanings: build a claim, put it on the stand, cross-examine it.
 
-A zero-knowledge proof workshop that runs entirely in your browser. The implemented kernel compiles four preset claims to PLONK constraints and runs an unblinded, teaching-scale DEEP/FRI proof through all seven verifier checks. The app now includes a circuit workbench, a 16-stage replay player, and proof URL fragments; integrated zero-knowledge blinding remains unfinished and is labeled accordingly.
+A zero-knowledge proof workshop that runs entirely in your browser. The implemented kernel compiles four preset claims to PLONK constraints and runs a teaching-scale DEEP/FRI proof through all seven verifier checks, with an optional blinded proof path. The app includes a circuit workbench, structured preset inputs, a worker-backed 16-stage replay player with inspectors, attack lab, and verify-only proof URL fragments. Its no-witness transcript panel remains explicitly an illustration, not a formal simulator proof.
 
 Then the part nothing else lets you do: **tamper with the witness and watch the exact equation that catches you.** Change one Sudoku cell. The constraint polynomial stops vanishing on the trace domain, the quotient stops being a polynomial, and the verifier's identity check fails — at a specific row, with specific numbers, highlighted in red.
 
@@ -50,7 +50,7 @@ Next.js (static export) · React 19 · TypeScript (strict) · Zustand · React F
 
 ## Status & plan
 
-M1–M5 are materially implemented: field/NTT arithmetic, SHA-256 commitments, the compiler and four presets, an explicit M4-only identity lesson, and the unblinded DEEP/FRI path with V1–V7. M6–M9 now have a useful first surface: a React Flow workbench that compiles the visible graph, a 16-stage replay player, proof export/import fragments, and an explicitly non-formal ZK ledger illustration. Remaining Phase 1 work includes structured input panels for every canvas preset, richer inspectors and worker orchestration, integrated blinded proving/simulation, and the full A3 statistical gate. It's a three-phase program (~6 months): **Phase 1** ships the workshop above; **Phase 2** adds extension-field challenges (~2⁻¹⁰⁰ soundness), a lookup argument with range gates and 9×9 Sudoku, Poseidon, and a guided course mode; **Phase 3** adds **Witness Script** — a tiny claim language that compiles to circuits, capped by a Merkle-membership proof.
+The current Phase 1 build is implemented: field/NTT arithmetic, SHA-256 commitments, compiler and four presets, worker-backed DEEP/FRI V1–V7 proofs, a clearly unsound-alone M4 lesson, canvas and structured inputs, replay inspectors, the shared attack lab, blinded teaching proofs, and verify-only share links. The remaining work is owner review: a cryptographic/security audit, a cold-visitor usability pass, and a deployment decision. Phase 2 adds extension-field challenges, lookups/9×9 Sudoku, Poseidon, and course mode; Phase 3 adds Witness Script.
 
 ## License
 
@@ -65,4 +65,4 @@ This IST timestamp rule is permanent for all future workflows, commits, and AI a
 Follow this format for version control:
 
 * **Base Format Version:** 0.0.0 — the version of the version-block schema itself (the shape of these lines).
-* **Product Version:** `v0.2.4_2026-03-02_21:12:33` (IST)
+* **Product Version:** `v0.3.0_2026-03-03_21:56:47` (IST)
