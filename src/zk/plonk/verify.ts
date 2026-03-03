@@ -13,6 +13,7 @@ import type { CompiledCircuit } from '../circuit/compile';
 import { publicInputAt, selectorPolynomials, selectorsAt, sigmaPolynomials, zetaIsInLdeCoset, zetaIsInTraceDomain } from './arithmetic';
 import { verifyPath } from '../merkle';
 import { deepCompositionAt, domainPoint, foldPair } from '../fri/fri';
+import { friInitialDegreeBound, quotientChunkCount, quotientChunkLabels } from './chunks';
 
 function paramsBytes(proof: Proof): Uint8Array {
   const bytes = new Uint8Array(13);
@@ -117,10 +118,7 @@ export async function verifyM4(circuit: CompiledCircuit, proof: Proof): Promise<
   const boundary = mul(lagrangeAt(0, circuit.n, zeta), sub(z, 1n));
   const left = add(add(gate, pi), add(mul(alpha, transition), mul(mul(alpha, alpha), boundary)));
   const zetaN = pow(zeta, BigInt(circuit.n));
-  const quotient = add(
-    openings.get('t-lo')!,
-    add(mul(zetaN, openings.get('t-mid')!), mul(mul(zetaN, zetaN), openings.get('t-hi')!)),
-  );
+  const quotient = quotientAtZeta(openings, quotientChunkLabels(proof.tRoots.length), zetaN);
   const right = mul(quotient, evalAt(vanishing(circuit.n), zeta));
   const identityOk = left === right;
   checks.splice(1, 0, {
@@ -133,20 +131,33 @@ export async function verifyM4(circuit: CompiledCircuit, proof: Proof): Promise<
   return { ok: checks.every((check) => check.ok), checks };
 }
 
+function quotientAtZeta(openings: Map<string, Fp>, labels: readonly string[], zetaN: Fp): Fp {
+  let value = 0n;
+  let power = 1n;
+  for (const label of labels) {
+    const chunk = openings.get(label);
+    if (chunk === undefined) throw new Error(`missing quotient opening ${label}`);
+    value = add(value, mul(power, chunk));
+    power = mul(power, zetaN);
+  }
+  return value;
+}
+
 /**
  * Full verifier entry point. Until M5 lands, it deliberately rejects an M4
  * proof after surfacing its real V1/V2 result: no one can mistake it for sound.
  */
 export async function verify(circuit: CompiledCircuit, proof: Proof): Promise<VerifyResult> {
-  const requiredOpenings = ['a', 'b', 'c', 's-a', 's-b', 's-c', 'z', 'z-omega', 't-lo', 't-mid', 't-hi'];
-  const expectedRoots = expectedFriRootCount(circuit.n);
+  const expectedChunks = quotientChunkCount(proof.params);
+  const quotientLabels = quotientChunkLabels(expectedChunks);
+  const requiredOpenings = ['a', 'b', 'c', 's-a', 's-b', 's-c', 'z', 'z-omega', ...quotientLabels];
+  const expectedRoots = expectedFriRootCount(friInitialDegreeBound(proof.params));
   const paramsOk = proof.version === 1
     && proof.params.n === circuit.n
     && proof.params.blowup > 0
     && (proof.params.blowup & (proof.params.blowup - 1)) === 0
-    && !proof.params.zk
     && proof.publicInputs.length === circuit.publicRows
-    && proof.tRoots.length === 3
+    && proof.tRoots.length === expectedChunks
     && proof.friLayerRoots.length === expectedRoots
     && proof.friFinalCoeffs.length === 8
     && proof.queries.length === proof.params.queries
@@ -231,8 +242,8 @@ function allFieldElements(values: readonly Fp[]): boolean {
   return values.every((value) => value >= 0n && value < P);
 }
 
-function expectedFriRootCount(n: number): number {
-  let degreeBound = n;
+function expectedFriRootCount(initialDegreeBound: number): number {
+  let degreeBound = initialDegreeBound;
   let roots = 1;
   while (degreeBound > 8) {
     degreeBound = Math.ceil(degreeBound / 2);
@@ -306,10 +317,7 @@ function identityCheck(
   const boundary = mul(lagrangeAt(0, circuit.n, zeta), sub(z, 1n));
   const left = add(add(gate, pi), add(mul(alpha, transition), mul(mul(alpha, alpha), boundary)));
   const zetaN = pow(zeta, BigInt(circuit.n));
-  const quotient = add(
-    openings.get('t-lo')!,
-    add(mul(zetaN, openings.get('t-mid')!), mul(mul(zetaN, zetaN), openings.get('t-hi')!)),
-  );
+  const quotient = quotientAtZeta(openings, quotientChunkLabels(proof.tRoots.length), zetaN);
   const right = mul(quotient, evalAt(vanishing(circuit.n), zeta));
   return {
     id: 'V2',
@@ -338,21 +346,17 @@ async function verifyMerkleQueries(proof: Proof, expectedIndices: readonly numbe
     const wires = leaf(query, 'wires', 3);
     const z = leaf(query, 'z', 1);
     const zOmega = leaf(query, 'z-omega', 1);
-    const tLo = leaf(query, 't-lo', 1);
-    const tMid = leaf(query, 't-mid', 1);
-    const tHi = leaf(query, 't-hi', 1);
     const wirePath = openingPath(query, 'wires', index);
     const zPath = openingPath(query, 'z', index);
     const zOmegaPath = openingPath(query, 'z-omega', rotated);
-    const tLoPath = openingPath(query, 't-lo', index);
-    const tMidPath = openingPath(query, 't-mid', index);
-    const tHiPath = openingPath(query, 't-hi', index);
     checks.push([wires !== undefined && wirePath !== undefined && await verifyPath(proof.wiresRoot, wires, wirePath, 'wires'), 'wire']);
     checks.push([z !== undefined && zPath !== undefined && await verifyPath(proof.zRoot, z, zPath, 'z'), 'Z']);
     checks.push([zOmega !== undefined && zOmegaPath !== undefined && await verifyPath(proof.zRoot, zOmega, zOmegaPath, 'z'), 'Z(ωx)']);
-    checks.push([tLo !== undefined && tLoPath !== undefined && await verifyPath(proof.tRoots[0]!, tLo, tLoPath, 't-lo'), 't_lo']);
-    checks.push([tMid !== undefined && tMidPath !== undefined && await verifyPath(proof.tRoots[1]!, tMid, tMidPath, 't-mid'), 't_mid']);
-    checks.push([tHi !== undefined && tHiPath !== undefined && await verifyPath(proof.tRoots[2]!, tHi, tHiPath, 't-hi'), 't_hi']);
+    for (const [chunk, label] of quotientChunkLabels(proof.tRoots.length).entries()) {
+      const value = leaf(query, label, 1);
+      const path = openingPath(query, label, index);
+      checks.push([value !== undefined && path !== undefined && await verifyPath(proof.tRoots[chunk]!, value, path, label), label]);
+    }
 
     let layerIndex = index;
     for (let layer = 0; layer < proof.friLayerRoots.length - 1; layer++) {
@@ -395,24 +399,23 @@ function friValueAt(query: QueryOpening, layer: number, index: number, layerSize
 
 function verifyDeepQueries(proof: Proof, openings: Map<string, Fp>, rho: Fp, zeta: Fp): CheckResult {
   const size = proof.params.n * proof.params.blowup;
+  const quotientLabels = quotientChunkLabels(proof.tRoots.length);
   const claimed = [
     openings.get('a')!, openings.get('b')!, openings.get('c')!, openings.get('z')!,
-    openings.get('z-omega')!, openings.get('t-lo')!, openings.get('t-mid')!, openings.get('t-hi')!,
+    openings.get('z-omega')!, ...quotientLabels.map((label) => openings.get(label)!),
   ];
   for (let queryIndex = 0; queryIndex < proof.queries.length; queryIndex++) {
     const query = proof.queries[queryIndex]!;
     const wires = leaf(query, 'wires', 3);
     const z = leaf(query, 'z', 1);
     const zOmega = leaf(query, 'z-omega', 1);
-    const tLo = leaf(query, 't-lo', 1);
-    const tMid = leaf(query, 't-mid', 1);
-    const tHi = leaf(query, 't-hi', 1);
-    if ([wires, z, zOmega, tLo, tMid, tHi].some((value) => value === undefined)) {
+    const chunks = quotientLabels.map((label) => leaf(query, label, 1));
+    if ([wires, z, zOmega, ...chunks].some((value) => value === undefined)) {
       return { id: 'V4', ok: false, detail: `DEEP opening is malformed at query ${queryIndex}.`, locus: { query: queryIndex } };
     }
     const expected = deepCompositionAt(
       domainPoint(query.index, size), zeta, rho,
-      [wires![0]!, wires![1]!, wires![2]!, z![0]!, zOmega![0]!, tLo![0]!, tMid![0]!, tHi![0]!],
+      [wires![0]!, wires![1]!, wires![2]!, z![0]!, zOmega![0]!, ...chunks.map((chunk) => chunk![0]!)],
       claimed,
     );
     const first = proof.friLayerRoots.length === 1

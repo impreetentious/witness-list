@@ -5,7 +5,7 @@
  */
 import type { Fp } from '../field';
 import type { CompiledCircuit, Witness } from '../circuit/compile';
-import { cosetLDE, interpolate } from '../ntt';
+import { cosetEvaluate, cosetLDE, interpolate } from '../ntt';
 import { buildTree } from '../merkle';
 import type { MerkleTree } from '../merkle';
 import { evalAt } from '../poly';
@@ -15,6 +15,8 @@ import { composeConstraints, buildQuotient } from './quotient';
 import { omegaTimes, selectorPolynomials, sigmaPolynomials, zetaIsInLdeCoset, zetaIsInTraceDomain } from './arithmetic';
 import { buildGrandProduct } from './permutation';
 import { buildFri, deepCompositionAt, domainPoint } from '../fri/fri';
+import { blind, seededFieldSource } from '../zkmode';
+import { friInitialDegreeBound, quotientChunkCount, quotientChunkLabel } from './chunks';
 
 export function prove(
   circuit: CompiledCircuit,
@@ -52,42 +54,36 @@ async function proveInternal(
   if (params.n !== circuit.n || params.blowup < 1 || (params.blowup & (params.blowup - 1)) !== 0) {
     throw new Error('proof parameters do not match the compiled circuit');
   }
-  // M8 owns integrating blinding into all commitments/openings. Do not accept
-  // a zk flag until that full path exists: a stand-alone blind() helper is not
-  // a zero-knowledge prover.
-  if (params.zk) throw new Error('full DEEP/FRI prover does not yet integrate ZK blinding');
-
   const transcript = createTranscript('witness-list/plonk-v1');
   await transcript.absorb('params', paramsBytes(params));
   await transcript.absorb('circuit-digest', circuit.digest);
   for (const input of publicInputs) await transcript.absorbFp('public-input', input);
 
-  const a = interpolate(witness.a);
-  const b = interpolate(witness.b);
-  const c = interpolate(witness.c);
-  const wires = await commitWirePolynomials(a, b, c, params.blowup);
+  const random = seededFieldSource(seed);
+  const a = blind(interpolate(witness.a), circuit.n, params, random);
+  const b = blind(interpolate(witness.b), circuit.n, params, random);
+  const c = blind(interpolate(witness.c), circuit.n, params, random);
+  const ldeSize = circuit.n * params.blowup;
+  const wires = await commitWirePolynomials(a, b, c, params.blowup, ldeSize);
   await transcript.absorb('wires-root', wires.tree.root.bytes);
   const beta = await transcript.squeezeFp('beta');
   const gamma = await transcript.squeezeFp('gamma');
 
   const grandProduct = buildGrandProduct(circuit, witness, beta, gamma);
-  const zCoefficients = interpolate(grandProduct.z);
-  const z = await commitPolynomial(zCoefficients, params.blowup, 'z');
+  const zCoefficients = blind(interpolate(grandProduct.z), circuit.n, params, random);
+  const z = await commitPolynomial(zCoefficients, params.blowup, 'z', ldeSize);
   await transcript.absorb('z-root', z.tree.root.bytes);
   const alpha = await transcript.squeezeFp('alpha');
 
-  const composition = composeConstraints(circuit, witness, publicInputs, beta, gamma, alpha);
-  const quotient = buildQuotient(composition.composed, circuit.n);
+  const composition = composeConstraints(circuit, witness, publicInputs, beta, gamma, alpha, { a, b, c, z: zCoefficients });
+  const quotient = buildQuotient(composition.composed, circuit.n, quotientChunkCount(params));
   if (!quotient.exact && !forcePastRemainder) {
     const rows = quotient.remainderOnH.flatMap((value, row) => value === 0n ? [] : [row]);
     throw new Error(`constraint composition has nonzero remainder on rows ${rows.join(', ')}`);
   }
-  const [tLo, tMid, tHi] = await Promise.all([
-    commitPolynomial(padded(quotient.tLo, circuit.n), params.blowup, 't-lo'),
-    commitPolynomial(padded(quotient.tMid, circuit.n), params.blowup, 't-mid'),
-    commitPolynomial(padded(quotient.tHi, circuit.n), params.blowup, 't-hi'),
-  ]);
-  const quotientCommitments = [tLo, tMid, tHi];
+  const quotientCommitments = await Promise.all(quotient.chunks.map((chunk, index) =>
+    commitPolynomial(padded(chunk, circuit.n), params.blowup, quotientChunkLabel(index), ldeSize),
+  ));
   for (const commitment of quotientCommitments) await transcript.absorb('t-root', commitment.tree.root.bytes);
 
   const zeta = await squeezeZeta(transcript, params);
@@ -96,17 +92,17 @@ async function proveInternal(
     ['a', evalAt(a, zeta)], ['b', evalAt(b, zeta)], ['c', evalAt(c, zeta)],
     ['s-a', evalAt(sA, zeta)], ['s-b', evalAt(sB, zeta)], ['s-c', evalAt(sC, zeta)],
     ['z', evalAt(zCoefficients, zeta)], ['z-omega', evalAt(zCoefficients, omegaTimes(zeta, circuit.n))],
-    ['t-lo', evalAt(quotient.tLo, zeta)], ['t-mid', evalAt(quotient.tMid, zeta)], ['t-hi', evalAt(quotient.tHi, zeta)],
+    ...quotient.chunks.map((chunk, index) => [quotientChunkLabel(index), evalAt(chunk, zeta)] as [string, Fp]),
   ];
   const openings: Proof['openings'] = openingPairs.map(([label, value]) => ({ label, value }));
   for (const opening of openings) await transcript.absorbFp(`opening-${opening.label}`, opening.value);
   const rho = await transcript.squeezeFp('rho');
 
   const claimed = [
-    openingPairs[0]![1], openingPairs[1]![1], openingPairs[2]![1], openingPairs[6]![1],
-    openingPairs[7]![1], openingPairs[8]![1], openingPairs[9]![1], openingPairs[10]![1],
+    openingPairs[0]![1], openingPairs[1]![1], openingPairs[2]![1],
+    openingPairs[6]![1], openingPairs[7]![1],
+    ...quotient.chunks.map((_, index) => openingPairs[8 + index]![1]),
   ];
-  const ldeSize = circuit.n * params.blowup;
   const deepValues = new Array<Fp>(ldeSize);
   for (let index = 0; index < ldeSize; index++) {
     const rotatedZIndex = (index + params.blowup) % ldeSize;
@@ -117,12 +113,12 @@ async function proveInternal(
       [
         wires.evaluations[index]![0]!, wires.evaluations[index]![1]!, wires.evaluations[index]![2]!,
         z.evaluations[index]![0]!, z.evaluations[rotatedZIndex]![0]!,
-        tLo.evaluations[index]![0]!, tMid.evaluations[index]![0]!, tHi.evaluations[index]![0]!,
+        ...quotientCommitments.map((commitment) => commitment.evaluations[index]![0]!),
       ],
       claimed,
     );
   }
-  const fri = await buildFri(deepValues, circuit.n, transcript, params.queries);
+  const fri = await buildFri(deepValues, friInitialDegreeBound(params), transcript, params.queries);
   const queries = fri.queries.map((query) => {
     const index = query.index;
     const rotatedZIndex = (index + params.blowup) % ldeSize;
@@ -132,17 +128,13 @@ async function proveInternal(
         wires: wires.evaluations[index]!.slice(),
         z: z.evaluations[index]!.slice(),
         'z-omega': z.evaluations[rotatedZIndex]!.slice(),
-        't-lo': tLo.evaluations[index]!.slice(),
-        't-mid': tMid.evaluations[index]!.slice(),
-        't-hi': tHi.evaluations[index]!.slice(),
+        ...Object.fromEntries(quotientCommitments.map((commitment, chunk) => [quotientChunkLabel(chunk), commitment.evaluations[index]!.slice()])),
       },
       paths: {
         wires: wires.tree.path(index),
         z: z.tree.path(index),
         'z-omega': z.tree.path(rotatedZIndex),
-        't-lo': tLo.tree.path(index),
-        't-mid': tMid.tree.path(index),
-        't-hi': tHi.tree.path(index),
+        ...Object.fromEntries(quotientCommitments.map((commitment, chunk) => [quotientChunkLabel(chunk), commitment.tree.path(index)])),
       },
     };
   });
@@ -175,7 +167,7 @@ async function proveInternal(
       witness: { a: witness.a.slice(), b: witness.b.slice(), c: witness.c.slice() },
       wirePolynomials: { a: a.slice(), b: b.slice(), c: c.slice() },
       grandProduct: { values: grandProduct.z.slice(), partials: grandProduct.partials.slice() },
-      quotient: { tLo: quotient.tLo.slice(), tMid: quotient.tMid.slice(), tHi: quotient.tHi.slice() },
+      quotient: { chunks: quotient.chunks.map((chunk) => chunk.slice()) },
       selectors: selectorPolynomials(circuit),
       composedOnH: composition.composedOnH,
       friLayers: fri.roots.length,
@@ -216,15 +208,16 @@ interface CommittedPolynomial {
   tree: MerkleTree;
 }
 
-async function commitPolynomial(coefficients: Fp[], blowup: number, domainSep: string): Promise<CommittedPolynomial> {
-  const evaluations = cosetLDE(coefficients, blowup).map((value) => [value]);
+async function commitPolynomial(coefficients: Fp[], blowup: number, domainSep: string, domainSize?: number): Promise<CommittedPolynomial> {
+  const evaluations = (domainSize === undefined ? cosetLDE(coefficients, blowup) : cosetEvaluate(coefficients, domainSize)).map((value) => [value]);
   return { evaluations, tree: await buildTree(evaluations, domainSep) };
 }
 
-async function commitWirePolynomials(a: Fp[], b: Fp[], c: Fp[], blowup: number): Promise<CommittedPolynomial> {
-  const aLde = cosetLDE(a, blowup);
-  const bLde = cosetLDE(b, blowup);
-  const cLde = cosetLDE(c, blowup);
+async function commitWirePolynomials(a: Fp[], b: Fp[], c: Fp[], blowup: number, domainSize?: number): Promise<CommittedPolynomial> {
+  const evaluate = (coefficients: Fp[]) => domainSize === undefined ? cosetLDE(coefficients, blowup) : cosetEvaluate(coefficients, domainSize);
+  const aLde = evaluate(a);
+  const bLde = evaluate(b);
+  const cLde = evaluate(c);
   const evaluations = aLde.map((value, index) => [value, bLde[index]!, cLde[index]!]);
   return { evaluations, tree: await buildTree(evaluations, 'wires') };
 }

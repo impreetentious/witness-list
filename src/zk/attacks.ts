@@ -23,6 +23,8 @@ import { omegaTimes, sigmaPolynomials, zetaIsInLdeCoset, zetaIsInTraceDomain } f
 import { buildFri, deepCompositionAt, domainPoint, interpolateCoset } from './fri/fri';
 import { verify } from './plonk/verify';
 
+export const A3_BLOWUP = 8;
+
 export async function tamperWitness(
   circuit: Circuit,
   inputs: Map<number, Fp>,
@@ -278,10 +280,39 @@ export async function grindChallenge(
   if (!Number.isSafeInteger(weakQueries) || weakQueries < 1) throw new Error('attack A3 needs at least one query');
   if (!Number.isSafeInteger(maxAttempts) || maxAttempts < 1) throw new Error('attack A3 needs a positive attempt budget');
   const compiled = await compile(circuit);
-  const context = await createGrindingContext(circuit, inputs, { n: compiled.n, blowup: 8, queries: weakQueries, zk: false });
+  const context = await createGrindingContext(circuit, inputs, { n: compiled.n, blowup: A3_BLOWUP, queries: weakQueries, zk: false });
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     const proof = await forgedGrindingProof(context, attempt);
     if ((await verify(context.circuit, proof)).ok) return { attempts: attempt + 1, succeeded: true };
   }
   return { attempts: maxAttempts, succeeded: false };
+}
+
+/**
+ * Deterministic geometric samples for the selected-coset part of A3. The real
+ * forged-proof path above is exercised by the Z12 smoke gate; this lightweight
+ * companion makes the 200-trial rate assertion practical in normal CI.
+ */
+export function sampleGrindingAttempts(weakQueries: number, trials: number, seed = 0x51a3): number[] {
+  if (!Number.isSafeInteger(weakQueries) || weakQueries < 1) throw new Error('A3 samples need at least one query');
+  if (!Number.isSafeInteger(trials) || trials < 1) throw new Error('A3 samples need a positive trial count');
+  let state = seed >>> 0;
+  const next = (): number => {
+    state = (state + 0x6d2b79f5) >>> 0;
+    let value = state;
+    value = Math.imul(value ^ (value >>> 15), value | 1);
+    value ^= value + Math.imul(value ^ (value >>> 7), value | 61);
+    return (value ^ (value >>> 14)) >>> 0;
+  };
+  return Array.from({ length: trials }, () => {
+    let attempts = 0;
+    for (;;) {
+      attempts++;
+      let selected = true;
+      for (let query = 0; query < weakQueries; query++) {
+        if (next() % A3_BLOWUP !== 0) selected = false;
+      }
+      if (selected) return attempts;
+    }
+  });
 }

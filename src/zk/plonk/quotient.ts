@@ -16,6 +16,8 @@ export interface QuotientResult {
   tLo: Poly;
   tMid: Poly;
   tHi: Poly;
+  /** Positional chunks, including deterministic zero-padded trailing chunks in ZK mode. */
+  chunks: Poly[];
   /** remainder evaluations over H — all zero iff the witness satisfies the circuit */
   remainderOnH: Fp[];
   exact: boolean;
@@ -30,6 +32,13 @@ export interface ConstraintComposition {
   composed: Poly;
 }
 
+export interface CommittedPolynomials {
+  a: Poly;
+  b: Poly;
+  c: Poly;
+  z: Poly;
+}
+
 /**
  * Compose the PLONK gate, copy-transition, and boundary relations directly on
  * H, then interpolate C. This is M4 foundation work only — it is unsound
@@ -42,6 +51,7 @@ export function composeConstraints(
   beta: Fp,
   gamma: Fp,
   alpha: Fp,
+  committed?: CommittedPolynomials,
 ): ConstraintComposition {
   if (publicInputs.length !== circuit.publicRows) {
     throw new Error(`expected ${circuit.publicRows} public inputs, received ${publicInputs.length}`);
@@ -70,10 +80,10 @@ export function composeConstraints(
     composedOnH[row] = add(gate, add(mul(alpha, transitionOnH[row]!), mul(alphaSquared, boundaryOnH[row]!)));
   }
   const wirePolynomials = [witness.a, witness.b, witness.c].map(interpolate);
-  const a = wirePolynomials[0]!;
-  const b = wirePolynomials[1]!;
-  const c = wirePolynomials[2]!;
-  const z = interpolate(grandProduct.z);
+  const a = committed?.a ?? wirePolynomials[0]!;
+  const b = committed?.b ?? wirePolynomials[1]!;
+  const c = committed?.c ?? wirePolynomials[2]!;
+  const z = committed?.z ?? interpolate(grandProduct.z);
   const selectorPolys = selectorPolynomials(circuit);
   const qL = selectorPolys[0]!;
   const qR = selectorPolys[1]!;
@@ -121,10 +131,12 @@ export function composeConstraints(
 export function buildQuotient(
   composed: Poly, // gate + PI + α·transition + α²·boundary
   n: number,
+  chunkCount = 3,
 ): QuotientResult {
   if (!Number.isSafeInteger(n) || n < 1 || (n & (n - 1)) !== 0) {
     throw new Error('quotient domain size must be a positive power of two');
   }
+  if (!Number.isSafeInteger(chunkCount) || chunkCount < 3) throw new Error('quotient needs at least three chunks');
   const { q, r } = polyDivRem(composed, vanishing(n));
   const omega = twoAdicRoot(Math.log2(n));
   const remainderOnH = new Array<Fp>(n);
@@ -134,12 +146,13 @@ export function buildQuotient(
     point = mul(point, omega);
   }
 
-  // v1's unblinded composition has degree below 3n. The later prover adds its
-  // documented blinding slack before committing these same positional chunks.
+  const chunks = Array.from({ length: chunkCount }, (_, chunk) => q.slice(chunk * n, (chunk + 1) * n));
+  if (q.length > chunkCount * n) throw new Error('quotient exceeds its committed chunk layout');
   return {
-    tLo: q.slice(0, n),
-    tMid: q.slice(n, 2 * n),
-    tHi: q.slice(2 * n, 3 * n),
+    tLo: chunks[0]!,
+    tMid: chunks[1]!,
+    tHi: chunks[2]!,
+    chunks,
     remainderOnH,
     exact: r.length === 0,
   };
