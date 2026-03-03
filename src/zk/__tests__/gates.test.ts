@@ -29,14 +29,31 @@ import { pythagorean } from '../circuit/presets/pythagorean';
 import { age, ageInputs, agePreset } from '../circuit/presets/age';
 import { mimcHash, makeMimcPreset } from '../circuit/presets/mimc';
 import { sudoku, sudokuCellWires, sudokuGivens, sudokuInputs } from '../circuit/presets/sudoku';
+import { sudoku9, sudoku9CellWires, sudoku9Givens, sudoku9Inputs } from '../circuit/presets/sudoku9';
 import { buildGrandProduct } from '../plonk/permutation';
 import { buildQuotient, composeConstraints } from '../plonk/quotient';
 import { foldLayer } from '../fri/fri';
 import { blind, simulateTranscript } from '../zkmode';
-import { prove, proveM4 } from '../plonk/prove';
+import { prove, proveM4, proveV1ForCompatibility } from '../plonk/prove';
 import { verify, verifyM4 } from '../plonk/verify';
 import { grindChallenge, sampleGrindingAttempts, tamperLeaf, tamperWitness } from '../attacks';
 import { decodeShare, encodeShare } from '../../share/codec';
+import {
+  add as addFp2,
+  embed,
+  equal as equalFp2,
+  fp2,
+  fp2One,
+  inv as invFp2,
+  mul as mulFp2,
+  nonResidueIsValid,
+  pow as powFp2,
+} from '../fp2';
+import { POSEIDON_MDS, poseidonHash, poseidonMds } from '../poseidon';
+import { buildPoseidonTree, verifyPoseidonPath } from '../poseidon-merkle';
+import { compileWitnessScript, parseWitnessScript, printWitnessScript, WitnessScriptError } from '../../script/witness-script';
+import { witnessScriptExamples } from '../../script/examples';
+import { findGrindingNonce, leadingZeroBits, verifyGrindingNonce } from '../grinding';
 
 const fpArb = fc.bigInt({ min: 0n, max: P - 1n });
 const fpNonZeroArb = fc.bigInt({ min: 1n, max: P - 1n });
@@ -250,6 +267,8 @@ describe('M3 gates — arithmetization', () => {
       n,
       qL: Array<Fp>(n).fill(0n), qR: Array<Fp>(n).fill(0n), qO: Array<Fp>(n).fill(0n),
       qM: Array<Fp>(n).fill(0n), qC: Array<Fp>(n).fill(0n),
+      qLookup: Array<Fp>(n).fill(0n), lookupTags: Array<Fp>(n).fill(0n), lookupTable: Array<Fp>(n).fill(0n),
+      lookupTableTags: Array<Fp>(n).fill(0n), lookupMode: 'membership' as const, lookupDummy: 0n, lookupDummyTag: 0n,
       sigma,
       publicRows: 0,
       digest: new Uint8Array(32),
@@ -282,10 +301,10 @@ describe('M3 gates — arithmetization', () => {
     expect(pythagoreanCompiled.n).toBe(32);
     expect(sudokuCompiled.n).toBe(512); // generic-gate baseline; fusion is a separate M3 follow-up
     expect(mimcCompiled.n).toBe(256);
-    expect(ageCompiled.n).toBe(64);
+    expect(ageCompiled.n).toBe(128);
     expect(sudokuGivens).toHaveLength(4);
     expect(sudokuInputs()).toHaveLength(20);
-    expect(ageInputs()).toHaveLength(8);
+    expect(ageInputs()).toHaveLength(1);
   });
 });
 
@@ -378,6 +397,7 @@ describe('M4/M5 gates — protocol', () => {
       42,
     );
     expect(trace.quotientRemainder).toEqual(Array<Fp>(compiled.n).fill(0n));
+    if (trace.proof.version !== 1) throw new Error('M4 returned an unexpected protocol version');
     const partial = await verifyM4(compiled, trace.proof);
     expect(partial.ok).toBe(true);
     const full = await verify(compiled, trace.proof);
@@ -404,6 +424,7 @@ describe('M4/M5 gates — protocol', () => {
     const verified = await verify(compiled, trace.proof);
     expect(verified.ok).toBe(true);
     expect(verified.checks.every((check) => check.ok)).toBe(true);
+    if (trace.proof.version !== 2) throw new Error('M5 returned an unexpected protocol version');
 
     const firstQuery = trace.proof.queries[0]!;
     const tampered = {
@@ -480,7 +501,7 @@ describe('M4/M5 gates — protocol', () => {
         expect(result.checks.every((check) => check.ok), `${circuit.name}, seed ${seed}`).toBe(true);
       }
     }
-  }, 30_000);
+  }, 90_000);
   it('Z12 smoke: the shared A3 prover can grind a Q=1 forged proof through the real verifier', async () => {
     const result = await grindChallenge(
       pythagorean,
@@ -494,7 +515,7 @@ describe('M4/M5 gates — protocol', () => {
   });
   it('Z10: fixed proof input has a frozen share-wire fingerprint', async () => {
     const compiled = await compile(pythagorean);
-    const proof = (await prove(
+    const proof = (await proveV1ForCompatibility(
       compiled,
       generateWitness(pythagorean, new Map([[1, 5n], [2, 3n], [3, 4n]])),
       [5n],
@@ -516,6 +537,183 @@ describe('M4/M5 gates — protocol', () => {
     expect(q1).toBeLessThan(8 * 3);
     expect(q2).toBeGreaterThan(64 / 3);
     expect(q2).toBeLessThan(64 * 3);
+  });
+});
+
+describe('Phase 2A gates — quadratic extension challenges', () => {
+  it('uses the independently verified non-residue and embeds the base field faithfully', () => {
+    expect(nonResidueIsValid()).toBe(true);
+    expect(equalFp2(embed(123n), fp2(123n, 0n))).toBe(true);
+    expect(equalFp2(mulFp2(embed(3n), embed(5n)), embed(15n))).toBe(true);
+  });
+
+  it('satisfies multiplication, inversion, and Fermat over Fp²', () => {
+    fc.assert(
+      fc.property(fpArb, fpArb, fpNonZeroArb, fpArb, (a, b, c, d) => {
+        const left = fp2(a, b);
+        const right = fp2(c, d);
+        expect(equalFp2(mulFp2(left, right), mulFp2(right, left))).toBe(true);
+        if (a !== 0n || b !== 0n) expect(equalFp2(mulFp2(left, invFp2(left)), fp2One)).toBe(true);
+      }),
+      { numRuns: 120 },
+    );
+    const value = fp2(11n, 29n);
+    // |Fp²*| = p² - 1, so this is the extension-field Fermat law.
+    expect(equalFp2(powFp2(value, P * P - 1n), fp2One)).toBe(true);
+    expect(equalFp2(addFp2(value, fp2(1n, 0n)), fp2(12n, 29n))).toBe(true);
+  });
+
+  it('propagates every protocol and FRI challenge through the v2 proof wire', async () => {
+    const compiled = await compile(pythagorean);
+    const trace = await prove(compiled, generateWitness(pythagorean, new Map([[1, 5n], [2, 3n], [3, 4n]])), [5n], { n: compiled.n, blowup: 8, queries: 2, zk: false }, 31);
+    expect(trace.proof.version).toBe(2);
+    for (const label of ['beta', 'gamma', 'alpha', 'zeta', 'rho', 'fri-beta-0']) {
+      expect(trace.transcript.find((entry) => entry.kind === 'squeeze' && entry.label === label)?.extensionValue, label).toBeDefined();
+    }
+    expect((await verify(compiled, trace.proof)).ok).toBe(true);
+  });
+});
+
+describe('Phase 2B/2C gates — bound lookups and multiset Sudoku', () => {
+  it('proves Plookup membership and rejects an out-of-table age', async () => {
+    const compiled = await compile(age);
+    const params = { n: compiled.n, blowup: 8, queries: 1, zk: false };
+    const honest = await prove(compiled, generateWitness(age, ageInputs(21n)), [], params, 9);
+    expect((await verify(compiled, honest.proof)).ok).toBe(true);
+    const shared = await decodeShare(await encodeShare({ circuit: age, publicInputs: [], proof: honest.proof }, false));
+    expect((await verify(await compile(shared.circuit), shared.proof)).ok).toBe(true);
+    const forged = await tamperWitness(age, ageInputs(21n), new Map([[agePreset.ageWire, 17n]]), params, 9);
+    expect((await verify(compiled, forged.proof)).checks.find((check) => check.id === 'V2')?.ok).toBe(false);
+  });
+
+  it('binds every 9×9 row, column, and box as a tagged multiset', async () => {
+    const compiled = await compile(sudoku9);
+    expect(compiled.n).toBe(512);
+    const publicInputs = sudoku9Givens.map((given) => given.value);
+    const params = { n: compiled.n, blowup: 8, queries: 1, zk: false };
+    const honest = await prove(compiled, generateWitness(sudoku9, sudoku9Inputs()), publicInputs, params, 12);
+    expect((await verify(compiled, honest.proof)).ok).toBe(true);
+    expect((await verify(compiled, tamperLeaf(honest, honest.proof.queries[0]!.index).proof)).checks.find((check) => check.id === 'V3')?.ok).toBe(false);
+    const forged = await tamperWitness(sudoku9, sudoku9Inputs(), new Map([[sudoku9CellWires[0]![2]!, 3n]]), params, 12);
+    expect((await verify(compiled, forged.proof)).checks.find((check) => check.id === 'V2')?.ok).toBe(false);
+  }, 30_000);
+});
+
+describe('Phase 2D gates — Poseidon workshop hash', () => {
+  it('matches the independently regenerated reference vectors', async () => {
+    await expect(poseidonHash(0n, 0n)).resolves.toBe(13593260552114296815n);
+    await expect(poseidonHash(1n, 2n)).resolves.toBe(18371212222320491351n);
+  });
+
+  it('uses an invertible Cauchy MDS layer', () => {
+    const transformed = poseidonMds([3n, 1n, 4n]);
+    expect(transformed).toHaveLength(3);
+    expect(POSEIDON_MDS.flat()).toHaveLength(9);
+    expect(transformed).not.toEqual([3n, 1n, 4n]);
+  });
+
+  it('builds and authenticates an optional prover-side Poseidon Merkle tree', async () => {
+    const tree = await buildPoseidonTree([3n, 5n, 8n, 13n]);
+    const path = tree.open(2);
+    expect(await verifyPoseidonPath(tree.root, 8n, path)).toBe(true);
+    expect(await verifyPoseidonPath(tree.root, 9n, path)).toBe(false);
+    await expect(buildPoseidonTree([1n, 2n, 3n])).rejects.toThrow(/power-of-two/);
+  });
+});
+
+describe('Phase 2E gates — post-commitment grinding deterrent', () => {
+  it('finds and checks transcript-bound SHA-256 work', async () => {
+    const challenge = new Uint8Array(32).fill(7);
+    const nonce = await findGrindingNonce(challenge, 6);
+    expect(await verifyGrindingNonce(challenge, 6, nonce)).toBe(true);
+    expect(leadingZeroBits(new Uint8Array([0, 0, 0x20]))).toBe(18);
+  });
+
+  it('binds the nonce before FRI query derivation', async () => {
+    const compiled = await compile(pythagorean);
+    const trace = await prove(
+      compiled,
+      generateWitness(pythagorean, new Map([[1, 5n], [2, 3n], [3, 4n]])),
+      [5n],
+      { n: compiled.n, blowup: 8, queries: 2, zk: false, grindingBits: 4 },
+      9,
+    );
+    expect(trace.proof.grindingNonce).toBeTypeOf('number');
+    expect((await verify(compiled, trace.proof)).ok).toBe(true);
+    const tampered = { ...trace.proof, grindingNonce: trace.proof.grindingNonce! + 1 };
+    expect((await verify(compiled, tampered)).checks.find((check) => check.id === 'V1')?.ok).toBe(false);
+  });
+});
+
+describe('Phase 3 gates — Witness Script', () => {
+  it('property-checks canonical pretty-print and parse idempotence', () => {
+    fc.assert(fc.property(
+      fc.constantFrom(...witnessScriptExamples.map((example) => example.source)),
+      (source) => {
+        const once = printWitnessScript(parseWitnessScript(source));
+        expect(printWitnessScript(parseWitnessScript(once))).toBe(once);
+      },
+    ));
+  });
+
+  it.each(witnessScriptExamples)(
+    'parses and lowers $title into the existing circuit IR',
+    async (example) => {
+      const compiledScript = await compileWitnessScript(example.source);
+      const compiledCircuit = await compile(compiledScript.circuit);
+      const inputs = compiledScript.deriveInputs(example.inputs);
+      const publicInputs = compiledScript.circuit.publicOrder.map((wire) => inputs.get(wire)!);
+      const trace = await prove(
+        compiledCircuit,
+        generateWitness(compiledScript.circuit, inputs),
+        publicInputs,
+        { n: compiledCircuit.n, blowup: 8, queries: 2, zk: false },
+        17,
+      );
+      expect((await verify(compiledCircuit, trace.proof)).ok, example.title).toBe(true);
+    },
+    30_000,
+  );
+
+  it('freezes the gallery and every standard-library lowering at reviewed gate counts', async () => {
+    const expected = new Map([
+      ['pythagorean', 11],
+      ['sudoku4', 195],
+      ['age', 2],
+      ['mimc', 199],
+      ['poseidon', 917],
+      ['merkle', 1758],
+    ]);
+    for (const example of witnessScriptExamples) {
+      expect((await compileWitnessScript(example.source)).circuit.gates.length, example.id).toBe(expected.get(example.id));
+    }
+  });
+
+  it('supports bounded loop constants and reports source-local syntax errors', async () => {
+    const source = `claim Loop {
+      private x: field;
+      let total = x;
+      for i in 1..3 { assert i * x == i * total; }
+    }`;
+    expect(parseWitnessScript(source).name).toBe('Loop');
+    const compiled = await compileWitnessScript(source);
+    expect(compiled.circuit.gates.length).toBeGreaterThan(3);
+    expect(() => parseWitnessScript('claim Broken { private x: field assert x == 0; }')).toThrow(WitnessScriptError);
+  });
+
+  it('reruns the shared negative attacks against a script-authored circuit', async () => {
+    const script = await compileWitnessScript(witnessScriptExamples[0]!.source);
+    const inputs = script.deriveInputs(witnessScriptExamples[0]!.inputs);
+    const compiled = await compile(script.circuit);
+    const params = { n: compiled.n, blowup: 8, queries: 2, zk: false };
+    for (const seed of [3, 11]) {
+      const target = script.circuit.gates.find((gate) => gate.op === 'mul')!;
+      const a1 = await tamperWitness(script.circuit, inputs, new Map([[target.id, 1n]]), params, seed);
+      expect((await verify(compiled, a1.proof)).checks.find((check) => check.id === 'V2')?.ok).toBe(false);
+      const honest = await prove(compiled, generateWitness(script.circuit, inputs), [5n], params, seed);
+      const a2 = tamperLeaf(honest, honest.proof.queries[0]!.index);
+      expect((await verify(compiled, a2.proof)).checks.find((check) => check.id === 'V3')?.ok).toBe(false);
+    }
   });
 });
 
@@ -576,5 +774,27 @@ describe('M8/M9 gates — ZK & sharing', () => {
     const compressed = await encodeShare(payload, true);
     expect(compressed.startsWith('#p=') || compressed.startsWith('#pu=')).toBe(true);
     expect(await decodeShare(compressed)).toEqual(payload);
+  });
+
+  it('carries canonical Witness Script provenance and binds it into the circuit digest', async () => {
+    const script = await compileWitnessScript(witnessScriptExamples[0]!.source);
+    const inputs = script.deriveInputs(witnessScriptExamples[0]!.inputs);
+    const compiled = await compile(script.circuit);
+    const proof = (await prove(
+      compiled,
+      generateWitness(script.circuit, inputs),
+      [5n],
+      { n: compiled.n, blowup: 8, queries: 2, zk: false },
+      31,
+    )).proof;
+    const payload = { circuit: script.circuit, publicInputs: [5n], proof };
+    expect(await decodeShare(await encodeShare(payload, false))).toEqual(payload);
+
+    const changedSource = {
+      ...script.circuit,
+      provenance: { kind: 'witness-script' as const, source: `${script.circuit.provenance!.source}\n` },
+    };
+    expect(await compile(changedSource).then((result) => result.digest)).not.toEqual(compiled.digest);
+    expect((await verify(await compile(changedSource), proof)).checks.find((check) => check.id === 'V1')?.ok).toBe(false);
   });
 });

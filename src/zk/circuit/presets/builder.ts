@@ -39,7 +39,15 @@ export class PresetBuilder {
     return this.gate('assert0', [value]);
   }
 
-  public build(name: string, publicOrder: number[]): Circuit {
-    return { name, gates: this.gates, publicOrder };
+  public lookup(value: number, tag = 0n): number {
+    return this.gate('lookup', [value], tag);
+  }
+
+  public build(name: string, publicOrder: number[], lookupTable?: bigint[]): Circuit {
+    return { name, gates: this.gates, publicOrder, ...(lookupTable === undefined ? {} : { lookupTable }) };
+  }
+
+  public buildMultiset(name: string, publicOrder: number[], lookupTable: bigint[], lookupTableTags: bigint[]): Circuit {
+    return { name, gates: this.gates, publicOrder, lookupTable, lookupMode: 'multiset', lookupTableTags };
   }
 }

@@ -1,6 +1,6 @@
 /** Circuit graph IR + validation. M3 (types now — they anchor the canvas). */
 
-export type GateOp = 'pub' | 'priv' | 'const' | 'add' | 'mul' | 'assert0';
+export type GateOp = 'pub' | 'priv' | 'const' | 'add' | 'mul' | 'assert0' | 'lookup';
 
 export interface Gate {
   id: number;
@@ -18,6 +18,13 @@ export interface Circuit {
   gates: Gate[];
   /** public-input gate ids in row order (pinned to first ℓ rows) */
   publicOrder: number[];
+  /** Optional authoring provenance; when present it is bound into the circuit digest. */
+  provenance?: { kind: 'witness-script'; source: string };
+  /** One fixed table per teaching circuit; lookup gates constrain their input to it. */
+  lookupTable?: bigint[];
+  /** Membership is Plookup; multiset additionally binds one tag per query/table entry. */
+  lookupMode?: 'membership' | 'multiset';
+  lookupTableTags?: bigint[];
 }
 
 export type ValidationIssue =
@@ -27,7 +34,8 @@ export type ValidationIssue =
   | { kind: 'dangling'; gateId: number; input: number }
   | { kind: 'duplicate'; gateId: number }
   | { kind: 'public'; gateId: number }
-  | { kind: 'assert-output'; gateId: number; consumer: number };
+  | { kind: 'assert-output'; gateId: number; consumer: number }
+  | { kind: 'lookup'; gateId: number };
 
 const expectedArity: Record<GateOp, number> = {
   pub: 0,
@@ -36,6 +44,7 @@ const expectedArity: Record<GateOp, number> = {
   add: 2,
   mul: 2,
   assert0: 1,
+  lookup: 1,
 };
 
 /** Validate graph shape before the compiler performs its deterministic toposort. */
@@ -47,7 +56,13 @@ export function validate(c: Circuit): ValidationIssue[] {
     else gatesById.set(gate.id, gate);
     if (gate.inputs.length !== expectedArity[gate.op]) issues.push({ kind: 'arity', gateId: gate.id });
     if (gate.op === 'const' && gate.value === undefined) issues.push({ kind: 'constant', gateId: gate.id });
+    if (gate.op === 'lookup' && (c.lookupTable === undefined || c.lookupTable.length === 0)) issues.push({ kind: 'lookup', gateId: gate.id });
   }
+  if (c.lookupTable !== undefined) {
+    const canonical = new Set(c.lookupTable.map(String));
+    if (c.lookupTable.length === 0 || (c.lookupMode !== 'multiset' && canonical.size !== c.lookupTable.length)) issues.push({ kind: 'lookup', gateId: -1 });
+  }
+  if (c.lookupMode === 'multiset' && c.lookupTableTags?.length !== c.lookupTable?.length) issues.push({ kind: 'lookup', gateId: -1 });
 
   const publicIds = new Set<number>();
   for (const gateId of c.publicOrder) {
@@ -64,7 +79,7 @@ export function validate(c: Circuit): ValidationIssue[] {
     for (const input of gate.inputs) {
       const producer = gatesById.get(input);
       if (producer === undefined) issues.push({ kind: 'dangling', gateId: gate.id, input });
-      else if (producer.op === 'assert0') {
+      else if (producer.op === 'assert0' || producer.op === 'lookup') {
         // An assert row has no constrained output slot. Treat it as a terminal statement,
         // rather than silently introducing an unconstrained wire into the circuit.
         issues.push({ kind: 'assert-output', gateId: input, consumer: gate.id });

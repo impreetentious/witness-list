@@ -8,13 +8,14 @@ import type { Fp } from '../field';
 import { intt } from '../ntt';
 import { buildTree } from '../merkle';
 import type { MerkleTree } from '../merkle';
-import type { QueryOpening } from '../types';
+import type { QueryOpeningV1 } from '../types';
 import type { Transcript } from '../transcript';
+import { encodeGrindingNonce, findGrindingNonce, validateGrindingBits } from '../grinding';
 
 export interface FriProof {
   layerRoots: { bytes: Uint8Array }[];
   finalCoeffs: Fp[]; // deg < 8
-  queries: QueryOpening[];
+  queries: QueryOpeningV1[];
 }
 
 interface FriLayer {
@@ -27,7 +28,8 @@ interface FriLayer {
 export interface BuiltFri {
   roots: { bytes: Uint8Array }[];
   finalCoeffs: Fp[];
-  queries: QueryOpening[];
+  grindingNonce?: number;
+  queries: QueryOpeningV1[];
 }
 
 const FINAL_DEGREE_BOUND = 8;
@@ -56,7 +58,7 @@ export function foldLayer(_layer: Fp[], _beta: Fp, _domainShift: Fp): Fp[] {
   const half = length >> 1;
   const omega = twoAdicRoot(Math.log2(length));
   const inverseTwo = inv(2n);
-  const folded = new Array<Fp>(half);
+  const folded = Array.from<Fp>({ length: half }).fill(0n);
   let x = _domainShift;
   for (let index = 0; index < half; index++) {
     const atX = _layer[index]!;
@@ -133,11 +135,13 @@ export async function buildFri(
   initialDegreeBound: number,
   transcript: Transcript,
   queries: number,
+  grindingBits = 0,
 ): Promise<BuiltFri> {
   if (!Number.isSafeInteger(initialDegreeBound) || initialDegreeBound < 1) {
     throw new Error('FRI degree bound must be positive');
   }
   if (!Number.isSafeInteger(queries) || queries < 1) throw new Error('FRI query count must be positive');
+  validateGrindingBits(grindingBits);
   log2PowerOfTwo(initialValues.length, 'FRI initial layer');
 
   const layers: FriLayer[] = [];
@@ -167,11 +171,17 @@ export async function buildFri(
   const finalPadded = [...finalCoeffs, ...Array<Fp>(FINAL_DEGREE_BOUND - finalCoeffs.length).fill(0n)];
   for (const coefficient of finalPadded) await transcript.absorbFp('fri-final-coeff', coefficient);
 
-  const queryOpenings: QueryOpening[] = [];
+  let grindingNonce: number | undefined;
+  if (grindingBits > 0) {
+    grindingNonce = await findGrindingNonce(await transcript.workDigest('fri-grinding'), grindingBits);
+    await transcript.absorb('fri-grinding-nonce', encodeGrindingNonce(grindingNonce));
+  }
+
+  const queryOpenings: QueryOpeningV1[] = [];
   for (let query = 0; query < queries; query++) {
     const index = await transcript.squeezeIndex('fri-query-index', initialValues.length);
     let layerIndex = index;
-    const friLayers: QueryOpening['friLayers'] = [];
+    const friLayers: QueryOpeningV1['friLayers'] = [];
     for (let level = 0; level < layers.length - 1; level++) {
       const layer = layers[level]!;
       const pairIndex = canonicalPairIndex(layerIndex, layer.values.length);
@@ -193,5 +203,5 @@ export async function buildFri(
       finalLayer: { value: finalLayer.values[layerIndex]!, path: finalLayer.tree.path(layerIndex) },
     });
   }
-  return { roots: layers.map((layer) => layer.tree.root), finalCoeffs: finalPadded, queries: queryOpenings };
+  return { roots: layers.map((layer) => layer.tree.root), finalCoeffs: finalPadded, grindingNonce, queries: queryOpenings };
 }

@@ -20,6 +20,14 @@ export interface CompiledCircuit {
   qO: Fp[];
   qM: Fp[];
   qC: Fp[];
+  /** Lookup selector and fixed table evaluations over H (protocol v2). */
+  qLookup: Fp[];
+  lookupTags: Fp[];
+  lookupTable: Fp[];
+  lookupTableTags: Fp[];
+  lookupMode: 'membership' | 'multiset';
+  lookupDummy: Fp;
+  lookupDummyTag: Fp;
   /** σ over 3n slots; slot ids on H, k1·H, k2·H with k1=7, k2=49 */
   sigma: Uint32Array;
   publicRows: number;
@@ -63,7 +71,7 @@ function nextPowerOfTwo(value: number): number {
   return n;
 }
 
-function buildRows(circuit: Circuit): { rows: CompiledRow[]; selectors: { qL: Fp[]; qR: Fp[]; qO: Fp[]; qM: Fp[]; qC: Fp[] } } {
+function buildRows(circuit: Circuit): { rows: CompiledRow[]; selectors: { qL: Fp[]; qR: Fp[]; qO: Fp[]; qM: Fp[]; qC: Fp[]; qLookup: Fp[]; lookupTags: Fp[] } } {
   assertValid(circuit);
   const rows: CompiledRow[] = circuit.publicOrder.map((gateId) => ({ a: gateId, b: null, c: null }));
   const qL: Fp[] = circuit.publicOrder.map(() => 1n);
@@ -71,6 +79,8 @@ function buildRows(circuit: Circuit): { rows: CompiledRow[]; selectors: { qL: Fp
   const qO: Fp[] = circuit.publicOrder.map(() => 0n);
   const qM: Fp[] = circuit.publicOrder.map(() => 0n);
   const qC: Fp[] = circuit.publicOrder.map(() => 0n);
+  const qLookup: Fp[] = circuit.publicOrder.map(() => 0n);
+  const lookupTags: Fp[] = circuit.publicOrder.map(() => 0n);
 
   for (const gate of topologicalOrder(circuit)) {
     switch (gate.op) {
@@ -79,29 +89,51 @@ function buildRows(circuit: Circuit): { rows: CompiledRow[]; selectors: { qL: Fp
         break;
       case 'const':
         rows.push({ a: null, b: null, c: gate.id });
-        qL.push(0n); qR.push(0n); qO.push(P - 1n); qM.push(0n); qC.push(mod(gate.value!));
+        qL.push(0n); qR.push(0n); qO.push(P - 1n); qM.push(0n); qC.push(mod(gate.value!)); qLookup.push(0n); lookupTags.push(0n);
         break;
       case 'add':
         rows.push({ a: gate.inputs[0]!, b: gate.inputs[1]!, c: gate.id });
-        qL.push(1n); qR.push(1n); qO.push(P - 1n); qM.push(0n); qC.push(0n);
+        qL.push(1n); qR.push(1n); qO.push(P - 1n); qM.push(0n); qC.push(0n); qLookup.push(0n); lookupTags.push(0n);
         break;
       case 'mul':
         rows.push({ a: gate.inputs[0]!, b: gate.inputs[1]!, c: gate.id });
-        qL.push(0n); qR.push(0n); qO.push(P - 1n); qM.push(1n); qC.push(0n);
+        qL.push(0n); qR.push(0n); qO.push(P - 1n); qM.push(1n); qC.push(0n); qLookup.push(0n); lookupTags.push(0n);
         break;
       case 'assert0':
         rows.push({ a: gate.inputs[0]!, b: null, c: null });
-        qL.push(1n); qR.push(0n); qO.push(0n); qM.push(0n); qC.push(0n);
+        qL.push(1n); qR.push(0n); qO.push(0n); qM.push(0n); qC.push(0n); qLookup.push(0n); lookupTags.push(0n);
+        break;
+      case 'lookup':
+        rows.push({ a: gate.inputs[0]!, b: null, c: null });
+        qL.push(0n); qR.push(0n); qO.push(0n); qM.push(0n); qC.push(0n); qLookup.push(1n); lookupTags.push(mod(gate.value ?? 0n));
         break;
     }
   }
 
-  const n = nextPowerOfTwo(rows.length);
+  const n = nextPowerOfTwo(Math.max(rows.length, circuit.lookupTable?.length ?? 0));
   while (rows.length < n) {
     rows.push({ a: null, b: null, c: null });
-    qL.push(0n); qR.push(0n); qO.push(0n); qM.push(0n); qC.push(0n);
+    qL.push(0n); qR.push(0n); qO.push(0n); qM.push(0n); qC.push(0n); qLookup.push(0n); lookupTags.push(0n);
   }
-  return { rows, selectors: { qL, qR, qO, qM, qC } };
+  return { rows, selectors: { qL, qR, qO, qM, qC, qLookup, lookupTags } };
+}
+
+function compiledLookupTable(circuit: Circuit, n: number): { lookupTable: Fp[]; lookupTableTags: Fp[]; lookupDummy: Fp; lookupDummyTag: Fp; lookupMode: 'membership' | 'multiset' } {
+  const pairs = (circuit.lookupTable ?? [0n]).map((value, index) => ({ value: mod(value), tag: mod(circuit.lookupTableTags?.[index] ?? 0n) }));
+  if (circuit.lookupMode !== 'multiset') pairs.sort((left, right) => left.value < right.value ? -1 : left.value > right.value ? 1 : 0);
+  const table = pairs.map((pair) => pair.value);
+  const tags = pairs.map((pair) => pair.tag);
+  if (table.length > n) throw new Error(`lookup table has ${table.length} entries but circuit domain has ${n} rows`);
+  const multiset = circuit.lookupMode === 'multiset';
+  const dummy = multiset ? table.at(-1)! : table[0]!;
+  const dummyTag = multiset ? tags.at(-1)! : tags[0]!;
+  return {
+    lookupTable: [...table, ...Array.from({ length: n - table.length }, () => table.at(-1)!)],
+    lookupTableTags: [...tags, ...Array.from({ length: n - tags.length }, () => tags.at(-1)!)],
+    lookupDummy: dummy,
+    lookupDummyTag: dummyTag,
+    lookupMode: circuit.lookupMode ?? 'membership',
+  };
 }
 
 function buildSigma(rows: CompiledRow[]): Uint32Array {
@@ -130,6 +162,10 @@ function buildSigma(rows: CompiledRow[]): Uint32Array {
 function canonicalBytes(circuit: Circuit, compiled: Omit<CompiledCircuit, 'digest'>): Uint8Array {
   const canonical = {
     name: circuit.name,
+    ...(circuit.provenance === undefined ? {} : { provenance: circuit.provenance }),
+    ...(circuit.lookupTable === undefined ? {} : { lookupTable: circuit.lookupTable.map(String) }),
+    ...(circuit.lookupMode === undefined ? {} : { lookupMode: circuit.lookupMode }),
+    ...(circuit.lookupTableTags === undefined ? {} : { lookupTableTags: circuit.lookupTableTags.map(String) }),
     gates: [...circuit.gates]
       .sort((a, b) => a.id - b.id)
       .map((gate) => ({ id: gate.id, op: gate.op, inputs: gate.inputs, value: gate.value?.toString() })),
@@ -139,6 +175,13 @@ function canonicalBytes(circuit: Circuit, compiled: Omit<CompiledCircuit, 'diges
     qO: compiled.qO.map(String),
     qM: compiled.qM.map(String),
     qC: compiled.qC.map(String),
+    ...(circuit.lookupTable === undefined ? {} : {
+      qLookup: compiled.qLookup.map(String),
+      lookupTags: compiled.lookupTags.map(String),
+      compiledLookupTable: compiled.lookupTable.map(String),
+      lookupTableTags: compiled.lookupTableTags.map(String),
+      lookupMode: compiled.lookupMode,
+    }),
     sigma: Array.from(compiled.sigma),
   };
   return new TextEncoder().encode(JSON.stringify(canonical));
@@ -156,6 +199,7 @@ export async function compile(circuit: Circuit): Promise<CompiledCircuit> {
   const compiledWithoutDigest = {
     n: rows.length,
     ...selectors,
+    ...compiledLookupTable(circuit, rows.length),
     sigma: buildSigma(rows),
     publicRows: circuit.publicOrder.length,
     rows,
@@ -199,6 +243,7 @@ export function generateWitness(
         value = mul(input(0), input(1));
         break;
       case 'assert0':
+      case 'lookup':
         value = 0n;
         break;
     }

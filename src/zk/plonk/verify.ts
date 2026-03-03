@@ -7,21 +7,25 @@ import { GENERATOR, P, add, mul, pow, sub } from '../field';
 import type { Fp } from '../field';
 import { evalAt, lagrangeAt, vanishing } from '../poly';
 import { createTranscript } from '../transcript';
-import type { CheckResult, Proof, VerifyResult } from '../types';
-import type { QueryOpening } from '../types';
+import type { AnyProof, CheckResult, ProofV1, VerifyResult } from '../types';
+import type { QueryOpeningV1 } from '../types';
 import type { CompiledCircuit } from '../circuit/compile';
 import { publicInputAt, selectorPolynomials, selectorsAt, sigmaPolynomials, zetaIsInLdeCoset, zetaIsInTraceDomain } from './arithmetic';
 import { verifyPath } from '../merkle';
 import { deepCompositionAt, domainPoint, foldPair } from '../fri/fri';
 import { friInitialDegreeBound, quotientChunkCount, quotientChunkLabels } from './chunks';
+import { encodeGrindingNonce, verifyGrindingNonce } from '../grinding';
+import { verifyFp2 } from './verify-fp2';
 
-function paramsBytes(proof: Proof): Uint8Array {
-  const bytes = new Uint8Array(13);
+function paramsBytes(proof: ProofV1): Uint8Array {
+  const grindingBits = proof.params.grindingBits ?? 0;
+  const bytes = new Uint8Array(grindingBits === 0 ? 13 : 14);
   const view = new DataView(bytes.buffer);
   view.setUint32(0, proof.params.n, true);
   view.setUint32(4, proof.params.blowup, true);
   view.setUint32(8, proof.params.queries, true);
   bytes[12] = proof.params.zk ? 1 : 0;
+  if (grindingBits > 0) bytes[13] = grindingBits;
   return bytes;
 }
 
@@ -31,7 +35,7 @@ function sameBytes(a: Uint8Array, b: Uint8Array): boolean {
   return true;
 }
 
-function openingMap(proof: Proof): Map<string, Fp> {
+function openingMap(proof: ProofV1): Map<string, Fp> {
   return new Map(proof.openings.map(({ label, value }) => [label, value]));
 }
 
@@ -40,7 +44,7 @@ function unavailable(id: CheckResult['id'], detail: string): CheckResult {
 }
 
 /** Replay M4's transcript and check V1/V2/V7 without claiming FRI soundness. */
-export async function verifyM4(circuit: CompiledCircuit, proof: Proof): Promise<VerifyResult> {
+export async function verifyM4(circuit: CompiledCircuit, proof: ProofV1): Promise<VerifyResult> {
   const checks: CheckResult[] = [];
   const paramsOk = proof.version === 1
     && proof.params.n === circuit.n
@@ -147,11 +151,18 @@ function quotientAtZeta(openings: Map<string, Fp>, labels: readonly string[], ze
  * Full verifier entry point. Until M5 lands, it deliberately rejects an M4
  * proof after surfacing its real V1/V2 result: no one can mistake it for sound.
  */
-export async function verify(circuit: CompiledCircuit, proof: Proof): Promise<VerifyResult> {
+export async function verify(circuit: CompiledCircuit, proof: AnyProof): Promise<VerifyResult> {
+  return proof.version === 2 ? verifyFp2(circuit, proof) : verifyV1(circuit, proof);
+}
+
+async function verifyV1(circuit: CompiledCircuit, proof: ProofV1): Promise<VerifyResult> {
   const expectedChunks = quotientChunkCount(proof.params);
   const quotientLabels = quotientChunkLabels(expectedChunks);
   const requiredOpenings = ['a', 'b', 'c', 's-a', 's-b', 's-c', 'z', 'z-omega', ...quotientLabels];
   const expectedRoots = expectedFriRootCount(friInitialDegreeBound(proof.params));
+  const grindingBits = proof.params.grindingBits ?? 0;
+  const grindingParamsOk = Number.isSafeInteger(grindingBits) && grindingBits >= 0 && grindingBits <= 24
+    && (grindingBits === 0 ? proof.grindingNonce === undefined : Number.isSafeInteger(proof.grindingNonce) && proof.grindingNonce! >= 0 && proof.grindingNonce! <= 0xffffffff);
   const paramsOk = proof.version === 1
     && proof.params.n === circuit.n
     && proof.params.blowup > 0
@@ -161,6 +172,7 @@ export async function verify(circuit: CompiledCircuit, proof: Proof): Promise<Ve
     && proof.friLayerRoots.length === expectedRoots
     && proof.friFinalCoeffs.length === 8
     && proof.queries.length === proof.params.queries
+    && grindingParamsOk
     && allFieldElements(proof.publicInputs)
     && allFieldElements(proof.openings.map((opening) => opening.value))
     && allFieldElements(proof.friFinalCoeffs);
@@ -211,7 +223,14 @@ export async function verify(circuit: CompiledCircuit, proof: Proof): Promise<Ve
     if (layer + 1 < proof.friLayerRoots.length) foldBetas.push(await transcript.squeezeFp(`fri-beta-${layer}`));
   }
   for (const coefficient of proof.friFinalCoeffs) await transcript.absorbFp('fri-final-coeff', coefficient);
-  const expectedQueryIndices = new Array<number>(proof.params.queries);
+  let grindingOk = true;
+  if (grindingBits > 0) {
+    const nonce = proof.grindingNonce!;
+    const challenge = await transcript.workDigest('fri-grinding');
+    grindingOk = await verifyGrindingNonce(challenge, grindingBits, nonce);
+    await transcript.absorb('fri-grinding-nonce', encodeGrindingNonce(nonce));
+  }
+  const expectedQueryIndices = Array.from<number>({ length: proof.params.queries }).fill(0);
   for (let query = 0; query < expectedQueryIndices.length; query++) {
     expectedQueryIndices[query] = await transcript.squeezeIndex('fri-query-index', circuit.n * proof.params.blowup);
   }
@@ -223,10 +242,12 @@ export async function verify(circuit: CompiledCircuit, proof: Proof): Promise<Ve
   const queryIndicesMatch = proof.queries.every((query, index) => query.index === expectedQueryIndices[index]!);
   const v1: CheckResult = {
     id: 'V1',
-    ok: sigmaOpeningsMatch && queryIndicesMatch,
-    detail: sigmaOpeningsMatch && queryIndicesMatch
-      ? 'Replayed the canonical Fiat–Shamir transcript, including FRI challenges and query indices.'
-      : 'Transcript-bound opening or query index differs from the canonical replay.',
+    ok: sigmaOpeningsMatch && queryIndicesMatch && grindingOk,
+    detail: sigmaOpeningsMatch && queryIndicesMatch && grindingOk
+      ? 'Replayed the canonical Fiat–Shamir transcript, including FRI challenges, optional grinding, and query indices.'
+      : grindingOk
+        ? 'Transcript-bound opening or query index differs from the canonical replay.'
+        : 'The post-commitment grinding nonce does not meet its advertised work factor.',
   };
 
   const v2 = identityCheck(circuit, proof, openings, beta, gamma, alpha, zeta);
@@ -254,7 +275,7 @@ function expectedFriRootCount(initialDegreeBound: number): number {
 
 async function squeezeZeta(
   transcript: ReturnType<typeof createTranscript>,
-  proof: Proof,
+  proof: ProofV1,
   circuit: CompiledCircuit,
 ): Promise<Fp> {
   for (;;) {
@@ -282,7 +303,7 @@ function failedFullTranscript(v7: CheckResult, detail: string): VerifyResult {
 
 function identityCheck(
   circuit: CompiledCircuit,
-  proof: Proof,
+  proof: ProofV1,
   openings: Map<string, Fp>,
   beta: Fp,
   gamma: Fp,
@@ -326,17 +347,17 @@ function identityCheck(
   };
 }
 
-function leaf(query: QueryOpening, label: string, arity: number): Fp[] | undefined {
+function leaf(query: QueryOpeningV1, label: string, arity: number): Fp[] | undefined {
   const value = query.leaves[label];
   return value !== undefined && value.length === arity && allFieldElements(value) ? value : undefined;
 }
 
-function openingPath(query: QueryOpening, label: string, expectedIndex: number) {
+function openingPath(query: QueryOpeningV1, label: string, expectedIndex: number) {
   const path = query.paths[label];
   return path !== undefined && path.leafIndex === expectedIndex ? path : undefined;
 }
 
-async function verifyMerkleQueries(proof: Proof, expectedIndices: readonly number[]): Promise<CheckResult> {
+async function verifyMerkleQueries(proof: ProofV1, expectedIndices: readonly number[]): Promise<CheckResult> {
   const size = proof.params.n * proof.params.blowup;
   for (let queryIndex = 0; queryIndex < proof.queries.length; queryIndex++) {
     const query = proof.queries[queryIndex]!;
@@ -388,7 +409,7 @@ async function verifyMerkleQueries(proof: Proof, expectedIndices: readonly numbe
   return { id: 'V3', ok: true, detail: `Verified all committed openings for ${proof.queries.length} FRI queries.` };
 }
 
-function friValueAt(query: QueryOpening, layer: number, index: number, layerSize: number): Fp | undefined {
+function friValueAt(query: QueryOpeningV1, layer: number, index: number, layerSize: number): Fp | undefined {
   const opening = query.friLayers[layer];
   if (opening === undefined) return undefined;
   const half = layerSize >> 1;
@@ -397,7 +418,7 @@ function friValueAt(query: QueryOpening, layer: number, index: number, layerSize
   return index < half ? opening.at : opening.sibling;
 }
 
-function verifyDeepQueries(proof: Proof, openings: Map<string, Fp>, rho: Fp, zeta: Fp): CheckResult {
+function verifyDeepQueries(proof: ProofV1, openings: Map<string, Fp>, rho: Fp, zeta: Fp): CheckResult {
   const size = proof.params.n * proof.params.blowup;
   const quotientLabels = quotientChunkLabels(proof.tRoots.length);
   const claimed = [
@@ -428,7 +449,7 @@ function verifyDeepQueries(proof: Proof, openings: Map<string, Fp>, rho: Fp, zet
   return { id: 'V4', ok: true, detail: 'Every queried DEEP value matches the committed FRI layer 0.' };
 }
 
-function verifyFriFolds(proof: Proof, betas: readonly Fp[]): CheckResult {
+function verifyFriFolds(proof: ProofV1, betas: readonly Fp[]): CheckResult {
   const initialSize = proof.params.n * proof.params.blowup;
   for (let queryIndex = 0; queryIndex < proof.queries.length; queryIndex++) {
     const query = proof.queries[queryIndex]!;
@@ -456,7 +477,7 @@ function verifyFriFolds(proof: Proof, betas: readonly Fp[]): CheckResult {
   return { id: 'V5', ok: true, detail: 'All queried FRI fold equations hold.' };
 }
 
-function verifyFinalFri(proof: Proof): CheckResult {
+function verifyFinalFri(proof: ProofV1): CheckResult {
   const finalSize = (proof.params.n * proof.params.blowup) >> (proof.friLayerRoots.length - 1);
   let shift = GENERATOR;
   for (let layer = 1; layer < proof.friLayerRoots.length; layer++) shift = mul(shift, shift);

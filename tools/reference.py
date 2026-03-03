@@ -37,6 +37,35 @@ def mimc(x: int, rounds: int = 32) -> int:
     return (s + x) % P  # feedforward
 
 
+# Phase 2 workshop Poseidon parameterisation. Constants are generated from the
+# same domain-separated SHA-256 rule as src/zk/poseidon.ts, rather than copied
+# into either implementation by hand.
+POSEIDON_WIDTH = 3
+POSEIDON_FULL_ROUNDS = 8
+POSEIDON_PARTIAL_ROUNDS = 22
+POSEIDON_ROUNDS = POSEIDON_FULL_ROUNDS + POSEIDON_PARTIAL_ROUNDS
+
+
+def poseidon_constant(round_index: int, state_index: int) -> int:
+    raw = hashlib.sha256(f"witness/poseidon/{round_index}/{state_index}".encode()).digest()
+    return int.from_bytes(raw[:8], "big") % P
+
+
+def poseidon_mds(state):
+    matrix = [[pow(i + j + 1, P - 2, P) for j in range(POSEIDON_WIDTH)] for i in range(POSEIDON_WIDTH)]
+    return [sum(matrix[i][j] * state[j] for j in range(POSEIDON_WIDTH)) % P for i in range(POSEIDON_WIDTH)]
+
+
+def poseidon(left: int, right: int) -> int:
+    state = [left % P, right % P, 0]
+    for r in range(POSEIDON_ROUNDS):
+        state = [(state[i] + poseidon_constant(r, i)) % P for i in range(POSEIDON_WIDTH)]
+        full = r < POSEIDON_FULL_ROUNDS // 2 or r >= POSEIDON_FULL_ROUNDS // 2 + POSEIDON_PARTIAL_ROUNDS
+        state = [pow(value, 7, P) if full or i == 0 else value for i, value in enumerate(state)]
+        state = poseidon_mds(state)
+    return state[0]
+
+
 def naive_ntt_roundtrip(n: int = 8) -> bool:
     wn = pow(G, (P - 1) // n, P)
     a = [3, 1, 4, 1, 5, 9, 2, 6]
@@ -60,4 +89,6 @@ if __name__ == "__main__":
     print("mimc c1..c4 =", [mimc_const(i) for i in range(1, 5)])
     for x in (0, 1, 123456789):
         print(f"mimc({x}) = {mimc(x)}")
+    print(f"poseidon(0, 0) = {poseidon(0, 0)}")
+    print(f"poseidon(1, 2) = {poseidon(1, 2)}")
     print("all field facts verified")

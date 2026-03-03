@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import type { CheckResult, ProofTrace } from '@/zk/types';
+import type { Fp2 } from '@/zk/fp2';
 
 interface Stage {
   title: string;
@@ -14,8 +15,8 @@ const stages: Stage[] = [
   { title: '1 · Witness fill', sentence: 'Private inputs fill the three wire columns; these rows are never sent directly.', math: 'w = (a, b, c) over H' },
   { title: '2 · Interpolation', sentence: 'Every trace column becomes a polynomial below its committed degree bound.', math: 'A(ωⁱ) = aᵢ' },
   { title: '3 · Commit wires', sentence: 'LDE values of the wire polynomials are hashed into one composite Merkle root.', math: 'root_w = Merkle(LDE(A) || LDE(B) || LDE(C))' },
-  { title: '4 · β, γ', sentence: 'Fiat–Shamir fixes copy-constraint challenges after wire commitment.', math: 'β, γ ← H(transcript)' },
-  { title: '5 · Grand product Z', sentence: 'The copy permutation telescopes when repeated wire slots agree.', math: 'Z(ωx) = Z(x) · f(x) / f′(x)' },
+  { title: '4 · β, γ', sentence: 'Fiat–Shamir fixes Fp² challenges for copy and optional lookup constraints.', math: 'β, γ ← Fp²(transcript)' },
+  { title: '5 · Grand products', sentence: 'Copy and lookup products telescope only when their committed relations agree.', math: 'Z(ωx) = Z(x) · numerator(x) / denominator(x)' },
   { title: '6 · Commit Z', sentence: 'The running product is committed before the quotient challenge.', math: 'root_Z = Merkle(LDE(Z))' },
   { title: '7 · α', sentence: 'One challenge combines gate, transition, and boundary constraints.', math: 'C = gate + α·transition + α²·boundary' },
   { title: '8 · Divide by Z_H', sentence: 'A true statement has zero remainder; a cheat highlights its nonzero rows.', math: 't(X) = C(X) / (Xⁿ − 1)' },
@@ -29,16 +30,26 @@ const stages: Stage[] = [
 ];
 
 type LiveStages = {
-  beta?: bigint;
-  gamma?: bigint;
-  alpha?: bigint;
-  zeta?: bigint;
-  rho?: bigint;
+  beta?: bigint | Fp2;
+  gamma?: bigint | Fp2;
+  alpha?: bigint | Fp2;
+  zeta?: bigint | Fp2;
+  rho?: bigint | Fp2;
   witness?: { a: bigint[]; b: bigint[]; c: bigint[] };
   wirePolynomials?: { a: bigint[]; b: bigint[]; c: bigint[] };
-  grandProduct?: { partials: bigint[] };
-  quotient?: { chunks: bigint[][] };
+  grandProduct?: { partials: Array<bigint | Fp2> };
+  quotient?: { chunks: Array<Array<bigint | Fp2>> };
+  lookupGrandProduct?: { mode: 'membership' | 'multiset'; partials: Fp2[]; h1?: bigint[]; h2?: bigint[] };
 };
+
+function field(value: bigint | Fp2 | undefined): string {
+  if (value === undefined) return '';
+  return typeof value === 'bigint' ? value.toString() : `${value.c0} + ${value.c1}u`;
+}
+
+function nonzero(value: bigint | Fp2): boolean {
+  return typeof value === 'bigint' ? value !== 0n : value.c0 !== 0n || value.c1 !== 0n;
+}
 
 export interface ProtocolPlayerProps {
   trace?: ProofTrace;
@@ -104,15 +115,18 @@ export function ProtocolPlayer({
   const liveData = useMemo(() => {
     if (trace === undefined) return [] as Array<[string, string]>;
     if (current === 3) return [['wire root', root(trace.proof.wiresRoot.bytes)], ['LDE size', String(trace.proof.params.n * trace.proof.params.blowup)]];
-    if (current === 4) return [['β', String(live?.beta ?? '')], ['γ', String(live?.gamma ?? '')]];
-    if (current === 5) return [['Z partial products', (live?.grandProduct?.partials ?? []).slice(0, 8).join(', ')], ['Z final', String(live?.grandProduct?.partials?.at(-1) ?? '')]];
-    if (current === 7) return [['α', String(live?.alpha ?? '')]];
-    if (current === 8) return [['nonzero remainder rows', trace.quotientRemainder.flatMap((value, row) => value === 0n ? [] : [row]).join(', ') || 'none']];
+    if (current === 4) return [['β', field(live?.beta)], ['γ', field(live?.gamma)]];
+    if (current === 5) return [['copy Z partial products', (live?.grandProduct?.partials ?? []).slice(0, 8).map(field).join(', ')], ['lookup argument', live?.lookupGrandProduct?.mode ?? 'not used'], ['lookup Z final', field(live?.lookupGrandProduct?.partials.at(-1))]];
+    if (current === 7) return [['α', field(live?.alpha)]];
+    if (current === 8) return [['nonzero remainder rows', trace.quotientRemainder.flatMap((value, row) => nonzero(value) ? [row] : []).join(', ') || 'none']];
     if (current === 9) return trace.proof.tRoots.map((value, index) => [`t${index} root`, root(value.bytes)]);
-    if (current === 10) return [['ζ', String(live?.zeta ?? '')], ...trace.proof.openings.slice(0, 6).map((opening) => [opening.label, String(opening.value)] as [string, string])];
-    if (current === 12) return [['ρ', String(live?.rho ?? '')], ['committed values batched', String(trace.proof.openings.length - 3)]];
-    if (current === 13) return [['FRI roots', String(trace.proof.friLayerRoots.length)], ['final coefficients', trace.proof.friFinalCoeffs.slice(0, 8).join(', ')]];
-    if (current === 14) return trace.proof.queries.map((query, index) => [`query ${index}`, `D[${query.index}], ${query.friLayers.length} folds`]);
+    if (current === 10) return [['ζ', field(live?.zeta)], ...trace.proof.openings.slice(0, 6).map((opening) => [opening.label, field(opening.value)] as [string, string])];
+    if (current === 12) return [['ρ', field(live?.rho)], ['committed values batched', String(trace.proof.openings.length - 3)]];
+    if (current === 13) return [['FRI roots', String(trace.proof.friLayerRoots.length)], ['final coefficients', trace.proof.friFinalCoeffs.slice(0, 8).map(field).join(', ')]];
+    if (current === 14) return [
+      ...(trace.proof.grindingNonce === undefined ? [] : [['anti-grinding nonce', String(trace.proof.grindingNonce)] as [string, string]]),
+      ...trace.proof.queries.map((query, index) => [`query ${index}`, `D[${query.index}], ${query.friLayers.length} folds`] as [string, string]),
+    ];
     if (current === 15) return checks.map((check) => [check.id, `${check.ok ? 'pass' : 'fail'} — ${check.detail}`]);
     return [['trace rows n', String(trace.proof.params.n)], ['circuit digest', root(trace.proof.circuitDigest)]];
   }, [checks, current, live, trace]);
@@ -157,7 +171,9 @@ export function ProtocolPlayer({
           {!verifierView && rows !== undefined && <TraceInspector a={rows.a} b={rows.b} c={rows.c} remainder={trace.quotientRemainder} />}
           <PolynomialInspector coefficients={coefficients} poly={poly} onPoly={setPoly} />
           <MerkleInspector roots={[['wires', trace.proof.wiresRoot.bytes], ['Z', trace.proof.zRoot.bytes], ...trace.proof.tRoots.map((tree, index) => [`t${index}`, tree.bytes] as [string, Uint8Array])]} query={selectedQuery} queryIndex={queryIndex} queryCount={trace.proof.queries.length} onQuery={setQueryIndex} />
+          <ProofSizeInspector trace={trace} />
           <FriInspector roots={trace.proof.friLayerRoots.map((tree) => tree.bytes)} />
+          {live?.lookupGrandProduct !== undefined && <LookupInspector lookup={live.lookupGrandProduct} />}
           <TranscriptInspector entries={trace.transcript} onJump={(label) => setCurrent(stageForTranscriptLabel(label))} />
         </div>
       )}
@@ -165,8 +181,21 @@ export function ProtocolPlayer({
   );
 }
 
-function TraceInspector({ a, b, c, remainder }: { a: bigint[]; b: bigint[]; c: bigint[]; remainder: bigint[] }) {
-  return <article className="inspector"><h3>Trace table</h3><div className="trace-scroll"><table><thead><tr><th>row</th><th>a</th><th>b</th><th>c</th><th>C(ωⁱ)</th></tr></thead><tbody>{a.slice(0, 128).map((value, row) => <tr key={row} className={remainder[row] === 0n ? '' : 'bad-row'}><td>{row}</td><td>{value}</td><td>{b[row]}</td><td>{c[row]}</td><td>{remainder[row]}</td></tr>)}</tbody></table></div></article>;
+function LookupInspector({ lookup }: { lookup: NonNullable<LiveStages['lookupGrandProduct']> }) {
+  return <article className="inspector"><h3>Lookup grand product</h3><p><strong>{lookup.mode === 'membership' ? 'Plookup sorted concatenation' : 'Tagged multiset equality'}</strong></p><p className="mono">Z partials: {lookup.partials.slice(0, 12).map(field).join(' · ')}</p>{lookup.h1 !== undefined && <p className="mono">h₁: {lookup.h1.slice(0, 12).join(', ')}<br />h₂: {lookup.h2?.slice(0, 12).join(', ')}</p>}</article>;
+}
+
+function TraceInspector({ a, b, c, remainder }: { a: bigint[]; b: bigint[]; c: bigint[]; remainder: ProofTrace['quotientRemainder'] }) {
+  const pageSize = 128;
+  const pageCount = Math.max(1, Math.ceil(a.length / pageSize));
+  const firstBadRow = remainder.findIndex((value) => typeof value === 'bigint' ? value !== 0n : value.c0 !== 0n || value.c1 !== 0n);
+  const [page, setPage] = useState(firstBadRow < 0 ? 0 : Math.floor(firstBadRow / pageSize));
+  useEffect(() => {
+    if (firstBadRow >= 0) setPage(Math.floor(firstBadRow / pageSize));
+  }, [firstBadRow]);
+  const start = Math.min(page, pageCount - 1) * pageSize;
+  const visible = a.slice(start, start + pageSize);
+  return <article className="inspector"><h3>Trace table</h3>{pageCount > 1 && <div className="trace-window-controls"><button type="button" onClick={() => setPage((current) => Math.max(0, current - 1))} disabled={page === 0}>Previous rows</button><span className="mono">rows {start}–{Math.min(a.length - 1, start + pageSize - 1)} of {a.length}</span><button type="button" onClick={() => setPage((current) => Math.min(pageCount - 1, current + 1))} disabled={page >= pageCount - 1}>Next rows</button></div>}<div className="trace-scroll"><table><thead><tr><th>row</th><th>a</th><th>b</th><th>c</th><th>C(ωⁱ)</th></tr></thead><tbody>{visible.map((value, index) => { const row = start + index; const r = remainder[row]; const bad = r !== undefined && (typeof r === 'bigint' ? r !== 0n : r.c0 !== 0n || r.c1 !== 0n); const shown = typeof r === 'bigint' ? r.toString() : r === undefined ? '—' : `${r.c0} + ${r.c1}u`; return <tr key={row} className={bad ? 'bad-row' : ''}><td>{row}</td><td>{value}</td><td>{b[row]}</td><td>{c[row]}</td><td>{shown}</td></tr>; })}</tbody></table></div></article>;
 }
 
 function PolynomialInspector({ coefficients, poly, onPoly }: { coefficients: bigint[]; poly: 'a' | 'b' | 'c'; onPoly: (poly: 'a' | 'b' | 'c') => void }) {
@@ -182,6 +211,15 @@ function FriInspector({ roots }: { roots: Uint8Array[] }) {
   return <article className="inspector"><h3>FRI folding cascade</h3><ol className="fri-cascade">{roots.map((bytes, index) => <li key={index}><strong>L{index}</strong><span>{root(bytes)}</span><small>degree bound halves after this commitment</small></li>)}</ol></article>;
 }
 
+function ProofSizeInspector({ trace }: { trace: ProofTrace }) {
+  const jsonBytes = new TextEncoder().encode(JSON.stringify(trace.proof, (_key, value: unknown) => typeof value === 'bigint' ? value.toString() : value)).length;
+  const lookupRootCount = trace.proof.version === 2 && trace.proof.lookupRoots !== undefined ? 1 + Number(trace.proof.lookupRoots.h1Root !== undefined) + Number(trace.proof.lookupRoots.h2Root !== undefined) : 0;
+  const merkleBytes = (2 + lookupRootCount + trace.proof.tRoots.length + trace.proof.friLayerRoots.length) * 32;
+  const openingBytes = trace.proof.openings.length * (trace.proof.version === 2 ? 16 : 8);
+  const queryBytes = trace.proof.queries.reduce((total, query) => total + Object.values(query.leaves).flat().length * 8 + Object.values(query.paths).reduce((paths, path) => paths + path.siblings.length * 32, 0), 0);
+  return <article className="inspector"><h3>Proof-size panel</h3><dl className="root-list"><div><dt>proof wire JSON</dt><dd>{jsonBytes.toLocaleString()} bytes</dd></div><div><dt>roots</dt><dd>{merkleBytes.toLocaleString()} bytes</dd></div><div><dt>claimed openings</dt><dd>{openingBytes.toLocaleString()} bytes</dd></div><div><dt>query leaf/path payload</dt><dd>{queryBytes.toLocaleString()}+ bytes</dd></div></dl><p className="mono">The exact exported size includes URL encoding and compression; this panel exposes the components before transport.</p></article>;
+}
+
 function TranscriptInspector({ entries, onJump }: { entries: ProofTrace['transcript']; onJump: (label: string) => void }) {
-  return <article className="inspector transcript-inspector"><h3>Transcript timeline</h3><div>{entries.map((entry, index) => <button key={`${entry.kind}-${entry.label}-${index}`} type="button" onClick={() => onJump(entry.label)}><code>{entry.kind}</code> {entry.label}</button>)}</div></article>;
+  return <article className="inspector transcript-inspector"><h3>Transcript timeline</h3><div>{entries.map((entry, index) => <button key={`${entry.kind}-${entry.label}-${index}`} type="button" onClick={() => onJump(entry.label)}><code>{entry.kind}</code> {entry.label}{entry.extensionValue === undefined ? '' : ` = ${field(entry.extensionValue)}`}</button>)}</div></article>;
 }

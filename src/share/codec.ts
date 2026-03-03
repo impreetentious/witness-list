@@ -5,12 +5,14 @@
  */
 import type { Circuit, Gate, GateOp } from '../zk/circuit/ir';
 import type { Fp } from '../zk/field';
-import type { MerklePath, MerkleRoot, Proof, QueryOpening } from '../zk/types';
+import { fp2 } from '../zk/fp2';
+import type { Fp2 } from '../zk/fp2';
+import type { AnyProof, MerklePath, MerkleRoot, Proof, ProofV1, QueryOpening, QueryOpeningV1 } from '../zk/types';
 
 export interface SharePayload {
   circuit: Circuit;
   publicInputs: Fp[];
-  proof: Proof;
+  proof: AnyProof;
 }
 
 interface EncodedPath {
@@ -18,7 +20,7 @@ interface EncodedPath {
   siblings: string[];
 }
 
-interface EncodedQuery {
+interface EncodedQueryV1 {
   index: number;
   leaves: Record<string, string[]>;
   paths: Record<string, EncodedPath>;
@@ -26,7 +28,17 @@ interface EncodedQuery {
   finalLayer: { value: string; path: EncodedPath };
 }
 
-interface EncodedProof {
+interface EncodedFp2 { c0: string; c1: string }
+
+interface EncodedQuery {
+  index: number;
+  leaves: Record<string, string[]>;
+  paths: Record<string, EncodedPath>;
+  friLayers: { at: EncodedFp2; sibling: EncodedFp2; atPath: EncodedPath; siblingPath: EncodedPath }[];
+  finalLayer: { value: EncodedFp2; path: EncodedPath };
+}
+
+interface EncodedProofV1 {
   version: 1;
   params: Proof['params'];
   circuitDigest: string;
@@ -37,14 +49,39 @@ interface EncodedProof {
   openings: { label: string; value: string }[];
   friLayerRoots: string[];
   friFinalCoeffs: string[];
+  grindingNonce?: number;
+  queries: EncodedQueryV1[];
+}
+
+interface EncodedProof {
+  version: 2;
+  params: Proof['params'];
+  circuitDigest: string;
+  publicInputs: string[];
+  wiresRoot: string;
+  zRoot: string;
+  tRoots: string[];
+  lookupRoots?: { mode: 'membership' | 'multiset'; h1Root?: string; h2Root?: string; zRoot: string };
+  openings: { label: string; value: EncodedFp2 }[];
+  friLayerRoots: string[];
+  friFinalCoeffs: EncodedFp2[];
+  grindingNonce?: number;
   queries: EncodedQuery[];
 }
 
 interface EncodedPayload {
   version: 1;
-  circuit: { name: string; gates: { id: number; op: GateOp; inputs: number[]; value?: string; pos?: { x: number; y: number } }[]; publicOrder: number[] };
+  circuit: {
+    name: string;
+    gates: { id: number; op: GateOp; inputs: number[]; value?: string; pos?: { x: number; y: number } }[];
+    publicOrder: number[];
+    provenance?: Circuit['provenance'];
+    lookupTable?: string[];
+    lookupMode?: Circuit['lookupMode'];
+    lookupTableTags?: string[];
+  };
   publicInputs: string[];
-  proof: EncodedProof;
+  proof: EncodedProofV1 | EncodedProof;
 }
 
 const base64UrlAlphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
@@ -104,7 +141,7 @@ function decodePath(path: EncodedPath): MerklePath {
   return { leafIndex: path.leafIndex, siblings };
 }
 
-function encodeQuery(query: QueryOpening): EncodedQuery {
+function encodeQueryV1(query: QueryOpeningV1): EncodedQueryV1 {
   return {
     index: query.index,
     leaves: Object.fromEntries(Object.entries(query.leaves).map(([label, values]) => [label, values.map(String)])),
@@ -116,12 +153,32 @@ function encodeQuery(query: QueryOpening): EncodedQuery {
   };
 }
 
+function encodeFp2(value: Fp2): EncodedFp2 {
+  return { c0: value.c0.toString(), c1: value.c1.toString() };
+}
+
+function encodeQuery(query: QueryOpening): EncodedQuery {
+  return {
+    index: query.index,
+    leaves: Object.fromEntries(Object.entries(query.leaves).map(([label, values]) => [label, values.map(String)])),
+    paths: Object.fromEntries(Object.entries(query.paths).map(([label, path]) => [label, encodePath(path)])),
+    friLayers: query.friLayers.map((layer) => ({
+      at: encodeFp2(layer.at), sibling: encodeFp2(layer.sibling), atPath: encodePath(layer.atPath), siblingPath: encodePath(layer.siblingPath),
+    })),
+    finalLayer: { value: encodeFp2(query.finalLayer.value), path: encodePath(query.finalLayer.path) },
+  };
+}
+
 function decodeFp(value: string): Fp {
   if (!/^(0|[1-9]\d*)$/.test(value)) throw new Error('field element is not an unsigned decimal integer');
   return BigInt(value);
 }
 
-function decodeQuery(query: EncodedQuery): QueryOpening {
+function decodeFp2(value: EncodedFp2): Fp2 {
+  return fp2(decodeFp(value.c0), decodeFp(value.c1));
+}
+
+function decodeQueryV1(query: EncodedQueryV1): QueryOpeningV1 {
   if (!Number.isSafeInteger(query.index) || query.index < 0) throw new Error('invalid query index');
   return {
     index: query.index,
@@ -134,7 +191,49 @@ function decodeQuery(query: EncodedQuery): QueryOpening {
   };
 }
 
+function decodeQuery(query: EncodedQuery): QueryOpening {
+  if (!Number.isSafeInteger(query.index) || query.index < 0) throw new Error('invalid query index');
+  return {
+    index: query.index,
+    leaves: Object.fromEntries(Object.entries(query.leaves).map(([label, values]) => [label, values.map(decodeFp)])),
+    paths: Object.fromEntries(Object.entries(query.paths).map(([label, path]) => [label, decodePath(path)])),
+    friLayers: query.friLayers.map((layer) => ({
+      at: decodeFp2(layer.at), sibling: decodeFp2(layer.sibling), atPath: decodePath(layer.atPath), siblingPath: decodePath(layer.siblingPath),
+    })),
+    finalLayer: { value: decodeFp2(query.finalLayer.value), path: decodePath(query.finalLayer.path) },
+  };
+}
+
 function encodePayload(payload: SharePayload): EncodedPayload {
+  const proof = payload.proof.version === 1 ? {
+    version: 1 as const,
+    params: { ...payload.proof.params },
+    circuitDigest: bytesToBase64Url(payload.proof.circuitDigest),
+    publicInputs: payload.proof.publicInputs.map(String),
+    wiresRoot: encodeRoot(payload.proof.wiresRoot), zRoot: encodeRoot(payload.proof.zRoot),
+    tRoots: payload.proof.tRoots.map(encodeRoot),
+    openings: payload.proof.openings.map((opening) => ({ label: opening.label, value: opening.value.toString() })),
+    friLayerRoots: payload.proof.friLayerRoots.map(encodeRoot), friFinalCoeffs: payload.proof.friFinalCoeffs.map(String),
+    ...(payload.proof.grindingNonce === undefined ? {} : { grindingNonce: payload.proof.grindingNonce }),
+    queries: payload.proof.queries.map(encodeQueryV1),
+  } : {
+    version: 2 as const,
+    params: { ...payload.proof.params },
+    circuitDigest: bytesToBase64Url(payload.proof.circuitDigest),
+    publicInputs: payload.proof.publicInputs.map(String),
+    wiresRoot: encodeRoot(payload.proof.wiresRoot), zRoot: encodeRoot(payload.proof.zRoot),
+    tRoots: payload.proof.tRoots.map(encodeRoot),
+    ...(payload.proof.lookupRoots === undefined ? {} : { lookupRoots: {
+      mode: payload.proof.lookupRoots.mode,
+      ...(payload.proof.lookupRoots.h1Root === undefined ? {} : { h1Root: encodeRoot(payload.proof.lookupRoots.h1Root) }),
+      ...(payload.proof.lookupRoots.h2Root === undefined ? {} : { h2Root: encodeRoot(payload.proof.lookupRoots.h2Root) }),
+      zRoot: encodeRoot(payload.proof.lookupRoots.zRoot),
+    } }),
+    openings: payload.proof.openings.map((opening) => ({ label: opening.label, value: encodeFp2(opening.value) })),
+    friLayerRoots: payload.proof.friLayerRoots.map(encodeRoot), friFinalCoeffs: payload.proof.friFinalCoeffs.map(encodeFp2),
+    ...(payload.proof.grindingNonce === undefined ? {} : { grindingNonce: payload.proof.grindingNonce }),
+    queries: payload.proof.queries.map(encodeQuery),
+  };
   return {
     version: 1,
     circuit: {
@@ -143,26 +242,18 @@ function encodePayload(payload: SharePayload): EncodedPayload {
         id: gate.id, op: gate.op, inputs: gate.inputs.slice(), value: gate.value?.toString(), pos: gate.pos === undefined ? undefined : { ...gate.pos },
       })),
       publicOrder: payload.circuit.publicOrder.slice(),
+      ...(payload.circuit.provenance === undefined ? {} : { provenance: { ...payload.circuit.provenance } }),
+      ...(payload.circuit.lookupTable === undefined ? {} : { lookupTable: payload.circuit.lookupTable.map(String) }),
+      ...(payload.circuit.lookupMode === undefined ? {} : { lookupMode: payload.circuit.lookupMode }),
+      ...(payload.circuit.lookupTableTags === undefined ? {} : { lookupTableTags: payload.circuit.lookupTableTags.map(String) }),
     },
     publicInputs: payload.publicInputs.map(String),
-    proof: {
-      version: 1,
-      params: { ...payload.proof.params },
-      circuitDigest: bytesToBase64Url(payload.proof.circuitDigest),
-      publicInputs: payload.proof.publicInputs.map(String),
-      wiresRoot: encodeRoot(payload.proof.wiresRoot),
-      zRoot: encodeRoot(payload.proof.zRoot),
-      tRoots: payload.proof.tRoots.map(encodeRoot),
-      openings: payload.proof.openings.map((opening) => ({ label: opening.label, value: opening.value.toString() })),
-      friLayerRoots: payload.proof.friLayerRoots.map(encodeRoot),
-      friFinalCoeffs: payload.proof.friFinalCoeffs.map(String),
-      queries: payload.proof.queries.map(encodeQuery),
-    },
+    proof,
   };
 }
 
 function decodePayload(encoded: EncodedPayload): SharePayload {
-  if (encoded.version !== 1 || encoded.proof.version !== 1) throw new Error('unsupported share payload version');
+  if (encoded.version !== 1 || (encoded.proof.version !== 1 && encoded.proof.version !== 2)) throw new Error('unsupported share payload version');
   if (!Array.isArray(encoded.circuit.gates) || !Array.isArray(encoded.circuit.publicOrder)) throw new Error('invalid circuit payload');
   const gates: Gate[] = encoded.circuit.gates.map((gate) => ({
     id: gate.id,
@@ -171,22 +262,43 @@ function decodePayload(encoded: EncodedPayload): SharePayload {
     value: gate.value === undefined ? undefined : BigInt(gate.value),
     pos: gate.pos === undefined ? undefined : { ...gate.pos },
   }));
-  const proof: Proof = {
+  const proof: AnyProof = encoded.proof.version === 1 ? {
     version: 1,
-    params: { ...encoded.proof.params },
-    circuitDigest: base64UrlToBytes(encoded.proof.circuitDigest),
-    publicInputs: encoded.proof.publicInputs.map(decodeFp),
-    wiresRoot: decodeRoot(encoded.proof.wiresRoot),
-    zRoot: decodeRoot(encoded.proof.zRoot),
+    params: { ...encoded.proof.params }, circuitDigest: base64UrlToBytes(encoded.proof.circuitDigest),
+    publicInputs: encoded.proof.publicInputs.map(decodeFp), wiresRoot: decodeRoot(encoded.proof.wiresRoot), zRoot: decodeRoot(encoded.proof.zRoot),
+    tRoots: encoded.proof.tRoots.map(decodeRoot), openings: encoded.proof.openings.map((opening) => ({ label: opening.label, value: decodeFp(opening.value) })),
+    friLayerRoots: encoded.proof.friLayerRoots.map(decodeRoot), friFinalCoeffs: encoded.proof.friFinalCoeffs.map(decodeFp),
+    ...(encoded.proof.grindingNonce === undefined ? {} : { grindingNonce: encoded.proof.grindingNonce }), queries: encoded.proof.queries.map(decodeQueryV1),
+  } satisfies ProofV1 : {
+    version: 2,
+    params: { ...encoded.proof.params }, circuitDigest: base64UrlToBytes(encoded.proof.circuitDigest),
+    publicInputs: encoded.proof.publicInputs.map(decodeFp), wiresRoot: decodeRoot(encoded.proof.wiresRoot), zRoot: decodeRoot(encoded.proof.zRoot),
     tRoots: encoded.proof.tRoots.map(decodeRoot),
-    openings: encoded.proof.openings.map((opening) => ({ label: opening.label, value: decodeFp(opening.value) })),
-    friLayerRoots: encoded.proof.friLayerRoots.map(decodeRoot),
-    friFinalCoeffs: encoded.proof.friFinalCoeffs.map(decodeFp),
-    queries: encoded.proof.queries.map(decodeQuery),
-  };
+    ...(encoded.proof.lookupRoots === undefined ? {} : { lookupRoots: {
+      mode: encoded.proof.lookupRoots.mode,
+      ...(encoded.proof.lookupRoots.h1Root === undefined ? {} : { h1Root: decodeRoot(encoded.proof.lookupRoots.h1Root) }),
+      ...(encoded.proof.lookupRoots.h2Root === undefined ? {} : { h2Root: decodeRoot(encoded.proof.lookupRoots.h2Root) }),
+      zRoot: decodeRoot(encoded.proof.lookupRoots.zRoot),
+    } }),
+    openings: encoded.proof.openings.map((opening) => ({ label: opening.label, value: decodeFp2(opening.value) })),
+    friLayerRoots: encoded.proof.friLayerRoots.map(decodeRoot), friFinalCoeffs: encoded.proof.friFinalCoeffs.map(decodeFp2),
+    ...(encoded.proof.grindingNonce === undefined ? {} : { grindingNonce: encoded.proof.grindingNonce }), queries: encoded.proof.queries.map(decodeQuery),
+  } satisfies Proof;
   if (proof.circuitDigest.length !== 32) throw new Error('circuit digest must be 32 bytes');
+  const provenance = encoded.circuit.provenance;
+  if (provenance !== undefined && (provenance.kind !== 'witness-script' || typeof provenance.source !== 'string')) {
+    throw new Error('invalid circuit provenance');
+  }
   return {
-    circuit: { name: encoded.circuit.name, gates, publicOrder: encoded.circuit.publicOrder.slice() },
+    circuit: {
+      name: encoded.circuit.name,
+      gates,
+      publicOrder: encoded.circuit.publicOrder.slice(),
+      ...(provenance === undefined ? {} : { provenance: { ...provenance } }),
+      ...(encoded.circuit.lookupTable === undefined ? {} : { lookupTable: encoded.circuit.lookupTable.map(decodeFp) }),
+      ...(encoded.circuit.lookupMode === undefined ? {} : { lookupMode: encoded.circuit.lookupMode }),
+      ...(encoded.circuit.lookupTableTags === undefined ? {} : { lookupTableTags: encoded.circuit.lookupTableTags.map(decodeFp) }),
+    },
     publicInputs: encoded.publicInputs.map(decodeFp),
     proof,
   };

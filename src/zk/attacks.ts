@@ -14,7 +14,7 @@ import { buildTree } from './merkle';
 import type { MerkleTree } from './merkle';
 import { evalAt } from './poly';
 import { createTranscript } from './transcript';
-import type { Params, Proof, ProofTrace } from './types';
+import type { Params, ProofTrace, ProofV1, QueryOpening, QueryOpeningV1 } from './types';
 import { compile, generateWitness } from './circuit/compile';
 import { proveForcedPastRemainder } from './plonk/prove';
 import { buildGrandProduct } from './plonk/permutation';
@@ -52,13 +52,15 @@ export function tamperLeaf(trace: ProofTrace, leafIndex: number): ProofTrace {
   const query = trace.proof.queries[queryIndex]!;
   const wires = query.leaves.wires;
   if (wires === undefined || wires.length !== 3) throw new Error('attack A2 proof has no composite wire leaf');
-  const proof = {
-    ...trace.proof,
-    queries: trace.proof.queries.map((candidate, index) => index !== queryIndex ? candidate : {
+  const proof = trace.proof.version === 1
+    ? { ...trace.proof, queries: trace.proof.queries.map((candidate, index) => index !== queryIndex ? candidate : {
       ...candidate,
       leaves: { ...candidate.leaves, wires: [add(wires[0]!, 1n), wires[1]!, wires[2]!] },
-    }),
-  };
+    }) as QueryOpeningV1[] }
+    : { ...trace.proof, queries: trace.proof.queries.map((candidate, index) => index !== queryIndex ? candidate : {
+      ...candidate,
+      leaves: { ...candidate.leaves, wires: [add(wires[0]!, 1n), wires[1]!, wires[2]!] },
+    }) as QueryOpening[] };
   return { ...trace, proof };
 }
 
@@ -72,7 +74,7 @@ interface GrindingContext {
   params: Params;
   publicInputs: Fp[];
   zeta: Fp;
-  openings: Proof['openings'];
+  openings: ProofV1['openings'];
   wires: CommittedValues;
   z: CommittedValues;
   t: [CommittedValues, CommittedValues, CommittedValues];
@@ -159,12 +161,12 @@ async function createGrindingContext(circuit: Circuit, inputs: Map<number, Fp>, 
     ['z', evalAt(zCoefficients, zeta)], ['z-omega', evalAt(zCoefficients, omegaTimes(zeta, compiled.n))],
     ['t-lo', evalAt(quotient.tLo, zeta)], ['t-mid', evalAt(quotient.tMid, zeta)], ['t-hi', evalAt(quotient.tHi, zeta)],
   ];
-  const openings: Proof['openings'] = openingPairs.map(([label, value]) => ({ label, value }));
+  const openings: ProofV1['openings'] = openingPairs.map(([label, value]) => ({ label, value }));
   return { circuit: compiled, params, publicInputs, zeta, openings, wires, z, t };
 }
 
 /** Recreate the transcript through rho after changing only the claimed t chunks. */
-async function transcriptToRho(context: GrindingContext, openings: Proof['openings']): Promise<Fp> {
+async function transcriptToRho(context: GrindingContext, openings: ProofV1['openings']): Promise<Fp> {
   const transcript = createTranscript('witness-list/plonk-v1');
   await transcript.absorb('params', paramsBytes(context.params));
   await transcript.absorb('circuit-digest', context.circuit.digest);
@@ -181,7 +183,7 @@ async function transcriptToRho(context: GrindingContext, openings: Proof['openin
   return transcript.squeezeFp('rho');
 }
 
-async function forgedGrindingProof(context: GrindingContext, nonce: number): Promise<Proof> {
+async function forgedGrindingProof(context: GrindingContext, nonce: number): Promise<ProofV1> {
   const openingByLabel = new Map(context.openings.map((opening) => [opening.label, opening.value]));
   // Preserve V2 while lying about both quotient chunks: t_lo + ζ^n·t_mid
   // stays fixed, but the DEEP claims (and therefore the FRI root) vary.
@@ -197,7 +199,7 @@ async function forgedGrindingProof(context: GrindingContext, nonce: number): Pro
   ];
   const ldeSize = context.circuit.n * context.params.blowup;
   const offset = nonce % context.params.blowup;
-  const sampleValues = new Array<Fp>(context.circuit.n);
+  const sampleValues = Array.from<Fp>({ length: context.circuit.n }).fill(0n);
   for (let row = 0; row < context.circuit.n; row++) {
     const index = offset + row * context.params.blowup;
     const rotatedZIndex = (index + context.params.blowup) % ldeSize;

@@ -9,6 +9,9 @@ import type { Fp } from './field';
 import { polyAdd, polyMul, vanishing } from './poly';
 import type { Poly } from './poly';
 import type { Params, TranscriptEntry } from './types';
+import type { Fp2 } from './fp2';
+import { fp2 } from './fp2';
+import { fp2PolyAdd, fp2PolyMul, type Fp2Poly, embedPoly } from './fp2-poly';
 import { createTranscript } from './transcript';
 
 export function blind(p: Poly, n: number, params: Params, rand: () => Fp): Poly {
@@ -19,6 +22,12 @@ export function blind(p: Poly, n: number, params: Params, rand: () => Fp): Poly 
   // deg r = QUERIES + 1 gives Q+1-wise independence for the off-trace openings.
   const r = Array.from({ length: params.queries + 2 }, rand);
   return polyAdd(p, polyMul(vanishing(n), r));
+}
+
+export function blindFp2(p: Fp2Poly, n: number, params: Params, rand: () => Fp): Fp2Poly {
+  if (!params.zk) return p.map((value) => ({ ...value }));
+  const random: Fp2[] = Array.from({ length: params.queries + 2 }, () => fp2(rand(), rand()));
+  return fp2PolyAdd(p, fp2PolyMul(embedPoly(vanishing(n)), random));
 }
 
 function paramsBytes(params: Params): Uint8Array {

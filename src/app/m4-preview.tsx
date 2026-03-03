@@ -30,6 +30,7 @@ export function M4Preview() {
         { n: circuit.n, blowup: 8, queries: 32, zk: false },
         42,
       );
+      if (trace.proof.version !== 1) throw new Error('M4 preview produced an unexpected protocol version');
       const [m4, full] = await Promise.all([verifyM4(circuit, trace.proof), verify(circuit, trace.proof)]);
       setResult({
         m4Checks: m4.checks,

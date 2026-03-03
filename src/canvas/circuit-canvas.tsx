@@ -33,6 +33,7 @@ const arity: Record<GateOp, number> = {
   add: 2,
   mul: 2,
   assert0: 1,
+  lookup: 1,
 };
 
 const labels: Record<GateOp, string> = {
@@ -42,6 +43,7 @@ const labels: Record<GateOp, string> = {
   add: 'Add',
   mul: 'Multiply',
   assert0: 'Assert zero',
+  lookup: 'Lookup 0…15',
 };
 
 function fromCircuit(circuit: Circuit): { nodes: GateNode[]; edges: Edge[] } {
@@ -78,8 +80,8 @@ function GateCard({ data, selected }: NodeProps<GateNode>) {
       <span className="gate-op">{data.op}</span>
       <strong>{labels[data.op]}</strong>
       {data.op === 'const' && <small>value {data.value ?? '0'}</small>}
-      {data.op === 'assert0' && <small>terminal statement</small>}
-      {data.op !== 'assert0' && <Handle id="output" type="source" position={Position.Right} />}
+      {(data.op === 'assert0' || data.op === 'lookup') && <small>terminal statement</small>}
+      {data.op !== 'assert0' && data.op !== 'lookup' && <Handle id="output" type="source" position={Position.Right} />}
     </div>
   );
 }
@@ -92,7 +94,7 @@ function parseGateId(id: string): number {
   return parsed;
 }
 
-function canvasCircuit(nodes: GateNode[], edges: Edge[]): Circuit {
+function canvasCircuit(nodes: GateNode[], edges: Edge[], template: Circuit): Circuit {
   const edgeByTarget = new Map<string, Map<number, Edge>>();
   for (const edge of edges) {
     const input = /^input-(\d+)$/.exec(edge.targetHandle ?? '');
@@ -111,11 +113,11 @@ function canvasCircuit(nodes: GateNode[], edges: Edge[]): Circuit {
       return parseGateId(edge.source);
     });
     let value: bigint | undefined;
-    if (node.data.op === 'const') {
+    if (node.data.op === 'const' || node.data.op === 'lookup') {
       try {
         value = BigInt(node.data.value ?? '0');
       } catch {
-        throw new Error(`Constant gate ${node.id} needs an integer value`);
+        throw new Error(`${node.data.op === 'const' ? 'Constant' : 'Lookup tag'} gate ${node.id} needs an integer value`);
       }
     }
     return {
@@ -130,6 +132,13 @@ function canvasCircuit(nodes: GateNode[], edges: Edge[]): Circuit {
     name: 'Canvas circuit',
     gates,
     publicOrder: nodes.filter((node) => node.data.op === 'pub').map((node) => parseGateId(node.id)),
+    ...(nodes.some((node) => node.data.op === 'lookup') ? template.lookupTable === undefined
+      ? { lookupTable: Array.from({ length: 16 }, (_, value) => BigInt(value)) }
+      : {
+        lookupTable: template.lookupTable.slice(),
+        ...(template.lookupMode === undefined ? {} : { lookupMode: template.lookupMode }),
+        ...(template.lookupTableTags === undefined ? {} : { lookupTableTags: template.lookupTableTags.slice() }),
+      } : {}),
   };
 }
 
@@ -161,7 +170,7 @@ export function CircuitCanvas({ circuit = pythagorean, onUseCircuit }: CircuitCa
         id,
         type: 'gate',
         position: { x: 120 + (current.length % 4) * 180, y: 90 + (current.length % 5) * 110 },
-        data: { op, value: op === 'const' ? '0' : undefined },
+        data: { op, value: op === 'const' || op === 'lookup' ? '0' : undefined },
       };
       setSelectedId(id);
       return [...current, gate];
@@ -178,14 +187,14 @@ export function CircuitCanvas({ circuit = pythagorean, onUseCircuit }: CircuitCa
 
   const compileCanvas = useCallback(async () => {
     try {
-      const circuit = canvasCircuit(nodes, edges);
-      const compiled = await compile(circuit);
+      const nextCircuit = canvasCircuit(nodes, edges, circuit);
+      const compiled = await compile(nextCircuit);
       setCompileStatus(`Compiled ${compiled.rows.length} PLONK rows (n = ${compiled.n}); circuit digest is bound into the proof transcript.`);
-      onUseCircuit?.(circuit);
+      onUseCircuit?.(nextCircuit);
     } catch (caught) {
       setCompileStatus(caught instanceof Error ? caught.message : 'The canvas could not be compiled.');
     }
-  }, [edges, nodes, onUseCircuit]);
+  }, [circuit, edges, nodes, onUseCircuit]);
 
   const reset = useCallback((preset: boolean) => {
     const next = preset ? fromCircuit(pythagorean) : { nodes: [] as GateNode[], edges: [] as Edge[] };

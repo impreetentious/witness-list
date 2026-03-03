@@ -10,13 +10,14 @@ import { buildTree } from '../merkle';
 import type { MerkleTree } from '../merkle';
 import { evalAt } from '../poly';
 import { createTranscript } from '../transcript';
-import type { MerkleRoot, Params, Proof, ProofTrace } from '../types';
+import type { MerkleRoot, Params, ProofV1, ProofTrace } from '../types';
 import { composeConstraints, buildQuotient } from './quotient';
 import { omegaTimes, selectorPolynomials, sigmaPolynomials, zetaIsInLdeCoset, zetaIsInTraceDomain } from './arithmetic';
 import { buildGrandProduct } from './permutation';
 import { buildFri, deepCompositionAt, domainPoint } from '../fri/fri';
 import { blind, seededFieldSource } from '../zkmode';
 import { friInitialDegreeBound, quotientChunkCount, quotientChunkLabel } from './chunks';
+import { proveFp2 } from './prove-fp2';
 
 export function prove(
   circuit: CompiledCircuit,
@@ -25,7 +26,7 @@ export function prove(
   params: Params,
   seed: number,
 ): Promise<ProofTrace> {
-  return proveInternal(circuit, witness, publicInputs, params, seed, false);
+  return proveFp2(circuit, witness, publicInputs, params, seed, false);
 }
 
 /**
@@ -40,16 +41,16 @@ export function proveForcedPastRemainder(
   params: Params,
   seed: number,
 ): Promise<ProofTrace> {
-  return proveInternal(circuit, witness, publicInputs, params, seed, true);
+  return proveFp2(circuit, witness, publicInputs, params, seed, true);
 }
 
-async function proveInternal(
+export async function proveV1ForCompatibility(
   circuit: CompiledCircuit,
   witness: Witness,
   publicInputs: Fp[],
   params: Params,
   seed: number,
-  forcePastRemainder: boolean,
+  forcePastRemainder = false,
 ): Promise<ProofTrace> {
   if (params.n !== circuit.n || params.blowup < 1 || (params.blowup & (params.blowup - 1)) !== 0) {
     throw new Error('proof parameters do not match the compiled circuit');
@@ -94,7 +95,7 @@ async function proveInternal(
     ['z', evalAt(zCoefficients, zeta)], ['z-omega', evalAt(zCoefficients, omegaTimes(zeta, circuit.n))],
     ...quotient.chunks.map((chunk, index) => [quotientChunkLabel(index), evalAt(chunk, zeta)] as [string, Fp]),
   ];
-  const openings: Proof['openings'] = openingPairs.map(([label, value]) => ({ label, value }));
+  const openings: ProofV1['openings'] = openingPairs.map(([label, value]) => ({ label, value }));
   for (const opening of openings) await transcript.absorbFp(`opening-${opening.label}`, opening.value);
   const rho = await transcript.squeezeFp('rho');
 
@@ -103,7 +104,7 @@ async function proveInternal(
     openingPairs[6]![1], openingPairs[7]![1],
     ...quotient.chunks.map((_, index) => openingPairs[8 + index]![1]),
   ];
-  const deepValues = new Array<Fp>(ldeSize);
+  const deepValues = Array.from<Fp>({ length: ldeSize }).fill(0n);
   for (let index = 0; index < ldeSize; index++) {
     const rotatedZIndex = (index + params.blowup) % ldeSize;
     deepValues[index] = deepCompositionAt(
@@ -118,7 +119,7 @@ async function proveInternal(
       claimed,
     );
   }
-  const fri = await buildFri(deepValues, friInitialDegreeBound(params), transcript, params.queries);
+  const fri = await buildFri(deepValues, friInitialDegreeBound(params), transcript, params.queries, params.grindingBits ?? 0);
   const queries = fri.queries.map((query) => {
     const index = query.index;
     const rotatedZIndex = (index + params.blowup) % ldeSize;
@@ -138,7 +139,7 @@ async function proveInternal(
       },
     };
   });
-  const proof: Proof = {
+  const proof: ProofV1 = {
     version: 1,
     params,
     circuitDigest: circuit.digest.slice(),
@@ -149,6 +150,7 @@ async function proveInternal(
     openings,
     friLayerRoots: fri.roots,
     friFinalCoeffs: fri.finalCoeffs,
+    ...(fri.grindingNonce === undefined ? {} : { grindingNonce: fri.grindingNonce }),
     queries,
   };
   return {
@@ -177,12 +179,15 @@ async function proveInternal(
 }
 
 function paramsBytes(params: Params): Uint8Array {
-  const bytes = new Uint8Array(13);
+  const grindingBits = params.grindingBits ?? 0;
+  if (!Number.isSafeInteger(grindingBits) || grindingBits < 0 || grindingBits > 24) throw new Error('invalid grinding bits');
+  const bytes = new Uint8Array(grindingBits === 0 ? 13 : 14);
   const view = new DataView(bytes.buffer);
   view.setUint32(0, params.n, true);
   view.setUint32(4, params.blowup, true);
   view.setUint32(8, params.queries, true);
   bytes[12] = params.zk ? 1 : 0;
+  if (grindingBits > 0) bytes[13] = grindingBits;
   return bytes;
 }
 
@@ -250,6 +255,7 @@ export async function proveM4(
     throw new Error('M4 proof parameters do not match the compiled circuit');
   }
   if (params.zk) throw new Error('M4 does not yet combine blinding with its unsound opening path');
+  if ((params.grindingBits ?? 0) !== 0) throw new Error('M4 has no FRI query phase in which to bind grinding work');
 
   const transcript = createTranscript('witness-list/plonk-m4/unsound');
   await transcript.absorb('params', paramsBytes(params));
@@ -292,10 +298,10 @@ export async function proveM4(
     ['z', evalAt(zCoefficients, zeta)], ['z-omega', evalAt(zCoefficients, omegaTimes(zeta, circuit.n))],
     ['t-lo', evalAt(quotient.tLo, zeta)], ['t-mid', evalAt(quotient.tMid, zeta)], ['t-hi', evalAt(quotient.tHi, zeta)],
   ];
-  const openings: Proof['openings'] = openingPairs.map(([label, value]) => ({ label, value }));
+  const openings: ProofV1['openings'] = openingPairs.map(([label, value]) => ({ label, value }));
   for (const opening of openings) await transcript.absorbFp(`opening-${opening.label}`, opening.value);
 
-  const proof: Proof = {
+  const proof: ProofV1 = {
     version: 1,
     params,
     circuitDigest: circuit.digest.slice(),

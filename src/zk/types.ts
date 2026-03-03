@@ -5,6 +5,7 @@
  * toggle greys out everything not in Proof.
  */
 import type { Fp } from './field';
+import type { Fp2 } from './fp2';
 
 export interface Params {
   /** trace rows, power of two */
@@ -15,6 +16,8 @@ export interface Params {
   queries: number;
   /** ZK blinding on/off */
   zk: boolean;
+  /** Optional post-commitment SHA-256 proof-of-work before FRI queries. */
+  grindingBits?: number;
 }
 
 export interface MerkleRoot {
@@ -26,7 +29,7 @@ export interface MerklePath {
   siblings: Uint8Array[]; // bottom-up
 }
 
-export interface QueryOpening {
+export interface QueryOpeningV1 {
   index: number; // position in D_0
   /** composite wire leaf (a,b,c) + Z + t-chunk leaves at index (and FRI sibling positions) */
   leaves: Record<string, Fp[]>;
@@ -46,7 +49,7 @@ export interface QueryOpening {
   finalLayer: { value: Fp; path: MerklePath };
 }
 
-export interface Proof {
+export interface ProofV1 {
   version: 1;
   params: Params;
   circuitDigest: Uint8Array;
@@ -58,8 +61,50 @@ export interface Proof {
   openings: { label: string; value: Fp }[];
   friLayerRoots: MerkleRoot[];
   friFinalCoeffs: Fp[]; // deg < 8
+  /** Present when params.grindingBits is nonzero; absorbed before queries. */
+  grindingNonce?: number;
+  queries: QueryOpeningV1[];
+}
+
+export interface LookupRoots {
+  mode: 'membership' | 'multiset';
+  h1Root?: MerkleRoot;
+  h2Root?: MerkleRoot;
+  zRoot: MerkleRoot;
+}
+
+/** Version 2 moves every Fiat–Shamir field challenge and FRI value to Fp². */
+export interface QueryOpening {
+  index: number;
+  /** Raw base-field limbs exactly as committed in each Merkle leaf. */
+  leaves: Record<string, Fp[]>;
+  paths: Record<string, MerklePath>;
+  friLayers: {
+    at: Fp2;
+    sibling: Fp2;
+    atPath: MerklePath;
+    siblingPath: MerklePath;
+  }[];
+  finalLayer: { value: Fp2; path: MerklePath };
+}
+
+export interface Proof {
+  version: 2;
+  params: Params;
+  circuitDigest: Uint8Array;
+  publicInputs: Fp[];
+  wiresRoot: MerkleRoot;
+  zRoot: MerkleRoot;
+  tRoots: MerkleRoot[];
+  lookupRoots?: LookupRoots;
+  openings: { label: string; value: Fp2 }[];
+  friLayerRoots: MerkleRoot[];
+  friFinalCoeffs: Fp2[];
+  grindingNonce?: number;
   queries: QueryOpening[];
 }
+
+export type AnyProof = ProofV1 | Proof;
 
 export type CheckId = 'V1' | 'V2' | 'V3' | 'V4' | 'V5' | 'V6' | 'V7';
 
@@ -82,14 +127,15 @@ export interface TranscriptEntry {
   label: string;
   bytes?: Uint8Array;
   value?: Fp;
+  extensionValue?: Fp2;
 }
 
 /** Everything the player renders. Proof ⊂ ProofTrace, structurally. */
 export interface ProofTrace {
-  proof: Proof;
+  proof: AnyProof;
   transcript: TranscriptEntry[];
   /** stage payloads keyed by player stage id */
   stages: Record<string, unknown>;
   /** quotient remainder per row — zero iff honest; the cheat-mode red rows */
-  quotientRemainder: Fp[];
+  quotientRemainder: Array<Fp | Fp2>;
 }
