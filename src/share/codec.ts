@@ -194,24 +194,39 @@ function decodePayload(encoded: EncodedPayload): SharePayload {
 
 async function compress(bytes: Uint8Array): Promise<Uint8Array | undefined> {
   if (typeof CompressionStream === 'undefined') return undefined;
-  const stream = new CompressionStream('deflate-raw');
-  const writer = stream.writable.getWriter();
-  const owned = new Uint8Array(bytes.length);
-  owned.set(bytes);
-  await writer.write(owned);
-  await writer.close();
-  return new Uint8Array(await new Response(stream.readable).arrayBuffer());
+  try {
+    const compressStream = async (): Promise<Uint8Array> => {
+      const stream = new CompressionStream('deflate-raw');
+      // Begin consuming before writing: TransformStream backpressure otherwise
+      // deadlocks some browsers on a large proof URL.
+      const compressed = new Response(stream.readable).arrayBuffer().then((buffer) => new Uint8Array(buffer));
+      const writer = stream.writable.getWriter();
+      const owned = new Uint8Array(bytes.length);
+      owned.set(bytes);
+      await writer.write(owned);
+      await writer.close();
+      return compressed;
+    };
+    // A browser that exposes CompressionStream but never drains it must still
+    // produce the interoperable #pu fallback rather than leave Share disabled.
+    const fallback = new Promise<undefined>((resolve) => globalThis.setTimeout(() => resolve(undefined), 1_000));
+    return await Promise.race([compressStream(), fallback]);
+  } catch {
+    return undefined;
+  }
 }
 
 async function decompress(bytes: Uint8Array): Promise<Uint8Array> {
   if (typeof DecompressionStream === 'undefined') throw new Error('this environment cannot decode compressed share URLs');
   const stream = new DecompressionStream('deflate-raw');
+  // Begin consuming before writing for the same backpressure reason as encode.
+  const plain = new Response(stream.readable).arrayBuffer().then((buffer) => new Uint8Array(buffer));
   const writer = stream.writable.getWriter();
   const owned = new Uint8Array(bytes.length);
   owned.set(bytes);
   await writer.write(owned);
   await writer.close();
-  return new Uint8Array(await new Response(stream.readable).arrayBuffer());
+  return plain;
 }
 
 /** Encode a fragment. `compressPayload=false` explicitly produces the #pu fallback. */

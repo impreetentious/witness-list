@@ -1,8 +1,8 @@
 /**
  * The honesty gates. Z1/Z2 are REAL now (field.ts is implemented);
  * fixture values were computed by an independent Python implementation
- * (tools/reference.py) before any TypeScript existed. The rest are it.todo,
- * converted milestone by milestone.
+ * (tools/reference.py) before any TypeScript existed. Every current Phase 1
+ * acceptance gate below is executable in the node-only protocol suite.
  */
 import { describe, expect, it } from 'vitest';
 import fc from 'fast-check';
@@ -35,7 +35,7 @@ import { foldLayer } from '../fri/fri';
 import { blind, simulateTranscript } from '../zkmode';
 import { prove, proveM4 } from '../plonk/prove';
 import { verify, verifyM4 } from '../plonk/verify';
-import { grindChallenge, tamperLeaf, tamperWitness } from '../attacks';
+import { grindChallenge, sampleGrindingAttempts, tamperLeaf, tamperWitness } from '../attacks';
 import { decodeShare, encodeShare } from '../../share/codec';
 
 const fpArb = fc.bigInt({ min: 0n, max: P - 1n });
@@ -506,11 +506,21 @@ describe('M4/M5 gates — protocol', () => {
     const fingerprint = Array.from(digest, (byte) => byte.toString(16).padStart(2, '0')).join('');
     expect(fingerprint).toBe('d3dcada69ffeeb2a314d658c7552594af45a059f9e5cad4ce45c21df4482b401');
   });
-  it.todo('Z12: grinding — Q=1 succeeds median ~8 attempts, Q=2 ~64 (within 3× over 200 trials)');
+  it('Z12: selected-coset grinding has the expected mean work over 200 deterministic trials', () => {
+    const mean = (values: number[]): number => values.reduce((total, value) => total + value, 0) / values.length;
+    const q1 = mean(sampleGrindingAttempts(1, 200));
+    const q2 = mean(sampleGrindingAttempts(2, 200));
+    // The geometric means are 8 and 64. The full forged-proof path is covered
+    // by the smoke gate above; this distribution gate keeps ordinary CI bounded.
+    expect(q1).toBeGreaterThan(8 / 3);
+    expect(q1).toBeLessThan(8 * 3);
+    expect(q2).toBeGreaterThan(64 / 3);
+    expect(q2).toBeLessThan(64 * 3);
+  });
 });
 
 describe('M8/M9 gates — ZK & sharing', () => {
-  it('Z13: blinding changes off-trace openings across seeds; disabled blinding repeats', () => {
+  it('Z13: blinding changes off-trace openings across seeds; disabled blinding repeats', async () => {
     const polynomial = [3n, 1n, 4n];
     const params = { n: 8, blowup: 8, queries: 4, zk: true };
     const first = blind(polynomial, 8, params, (() => {
@@ -523,6 +533,18 @@ describe('M8/M9 gates — ZK & sharing', () => {
     })());
     expect(evalAt(first, 7n)).not.toBe(evalAt(second, 7n));
     expect(blind(polynomial, 8, { ...params, zk: false }, () => 99n)).toEqual(polynomial);
+
+    const compiled = await compile(pythagorean);
+    const inputs = new Map([[1, 5n], [2, 3n], [3, 4n]]);
+    const proofParams = { n: compiled.n, blowup: 8, queries: 2, zk: true };
+    const [runA, runB] = await Promise.all([
+      prove(compiled, generateWitness(pythagorean, inputs), [5n], proofParams, 7),
+      prove(compiled, generateWitness(pythagorean, inputs), [5n], proofParams, 8),
+    ]);
+    expect((await verify(compiled, runA.proof)).ok).toBe(true);
+    expect((await verify(compiled, runB.proof)).ok).toBe(true);
+    expect(runA.proof.openings.find((opening) => opening.label === 'a')?.value)
+      .not.toBe(runB.proof.openings.find((opening) => opening.label === 'a')?.value);
   });
 
   it('ZK transcript illustration is deterministic and requires no witness input', async () => {
