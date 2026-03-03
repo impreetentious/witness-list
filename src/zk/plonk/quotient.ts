@@ -59,10 +59,10 @@ export function composeConstraints(
   const grandProduct = buildGrandProduct(circuit, witness, beta, gamma);
   const { numerators, denominators } = permutationFactors(circuit, witness, beta, gamma);
   const alphaSquared = mul(alpha, alpha);
-  const gateOnH = new Array<Fp>(circuit.n);
-  const transitionOnH = new Array<Fp>(circuit.n);
-  const boundaryOnH = new Array<Fp>(circuit.n).fill(0n);
-  const composedOnH = new Array<Fp>(circuit.n);
+  const gateOnH = Array.from<Fp>({ length: circuit.n }).fill(0n);
+  const transitionOnH = Array.from<Fp>({ length: circuit.n }).fill(0n);
+  const boundaryOnH = Array.from<Fp>({ length: circuit.n }).fill(0n);
+  const composedOnH = Array.from<Fp>({ length: circuit.n }).fill(0n);
 
   for (let row = 0; row < circuit.n; row++) {
     let gate = add(
@@ -105,7 +105,7 @@ export function composeConstraints(
     polyAdd(polyMul(qL, a), polyMul(qR, b)),
     polyAdd(polyMul(qO, c), polyAdd(polyMul(qM, polyMul(a, b)), qC)),
   );
-  const publicInputValues = new Array<Fp>(circuit.n).fill(0n);
+  const publicInputValues = Array.from<Fp>({ length: circuit.n }).fill(0n);
   for (let row = 0; row < publicInputs.length; row++) publicInputValues[row] = neg(publicInputs[row]!);
   const gateWithPublicInputs = polyAdd(gate, interpolate(publicInputValues));
   const numerator = product3(linearFactor(a, identityA), linearFactor(b, identityB), linearFactor(c, identityC));
@@ -118,7 +118,7 @@ export function composeConstraints(
     return scaled;
   });
   const transition = polySub(polyMul(z, numerator), polyMul(zOmega, denominator));
-  const l1Values = new Array<Fp>(circuit.n).fill(0n);
+  const l1Values = Array.from<Fp>({ length: circuit.n }).fill(0n);
   l1Values[0] = 1n;
   const boundary = polyMul(interpolate(l1Values), polySub(z, [1n]));
   const composed = polyAdd(
@@ -139,7 +139,7 @@ export function buildQuotient(
   if (!Number.isSafeInteger(chunkCount) || chunkCount < 3) throw new Error('quotient needs at least three chunks');
   const { q, r } = polyDivRem(composed, vanishing(n));
   const omega = twoAdicRoot(Math.log2(n));
-  const remainderOnH = new Array<Fp>(n);
+  const remainderOnH = Array.from<Fp>({ length: n }).fill(0n);
   let point = 1n;
   for (let row = 0; row < n; row++) {
     remainderOnH[row] = evalAt(r, point);

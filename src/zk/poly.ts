@@ -14,7 +14,7 @@ function trim(p: Poly): Poly {
 }
 
 export function polyAdd(a: Poly, b: Poly): Poly {
-  const out = new Array<Fp>(Math.max(a.length, b.length)).fill(0n);
+  const out = Array.from<Fp>({ length: Math.max(a.length, b.length) }).fill(0n);
   for (let i = 0; i < out.length; i++) out[i] = add(a[i] ?? 0n, b[i] ?? 0n);
   return trim(out);
 }
@@ -25,7 +25,7 @@ export function polyScale(p: Poly, scalar: Fp): Poly {
 }
 
 export function polySub(a: Poly, b: Poly): Poly {
-  const out = new Array<Fp>(Math.max(a.length, b.length)).fill(0n);
+  const out = Array.from<Fp>({ length: Math.max(a.length, b.length) }).fill(0n);
   for (let i = 0; i < out.length; i++) out[i] = sub(a[i] ?? 0n, b[i] ?? 0n);
   return trim(out);
 }
@@ -33,7 +33,7 @@ export function polySub(a: Poly, b: Poly): Poly {
 /** Coefficient-form multiplication. Workshop circuits stay small enough for schoolbook multiplication. */
 export function polyMul(a: Poly, b: Poly): Poly {
   if (a.length === 0 || b.length === 0) return [];
-  const out = new Array<Fp>(a.length + b.length - 1).fill(0n);
+  const out = Array.from<Fp>({ length: a.length + b.length - 1 }).fill(0n);
   for (let i = 0; i < a.length; i++) {
     for (let j = 0; j < b.length; j++) {
       out[i + j] = add(out[i + j]!, mul(a[i]!, b[j]!));
@@ -50,7 +50,7 @@ export function polyDivRem(a: Poly, b: Poly): { q: Poly; r: Poly } {
   const remainder = trim(a);
   if (remainder.length < divisor.length) return { q: [], r: remainder };
 
-  const quotient = new Array<Fp>(remainder.length - divisor.length + 1).fill(0n);
+  const quotient = Array.from<Fp>({ length: remainder.length - divisor.length + 1 }).fill(0n);
   const divisorLeadInv = inv(divisor[divisor.length - 1]!);
   while (remainder.length >= divisor.length) {
     const degreeDelta = remainder.length - divisor.length;
@@ -68,7 +68,7 @@ export function polyDivRem(a: Poly, b: Poly): { q: Poly; r: Poly } {
 /** Z_H = x^n − 1; on the LDE coset it never vanishes. */
 export function vanishing(n: number): Poly {
   if (!Number.isSafeInteger(n) || n < 1) throw new Error('vanishing: n must be positive');
-  const out = new Array<Fp>(n + 1).fill(0n);
+  const out = Array.from<Fp>({ length: n + 1 }).fill(0n);
   out[0] = P - 1n;
   out[n] = 1n;
   return out;

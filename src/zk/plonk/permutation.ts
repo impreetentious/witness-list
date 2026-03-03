@@ -35,7 +35,7 @@ function product3(a: Fp, b: Fp, c: Fp): Fp {
 
 function powersOnH(n: number): Fp[] {
   const omega = twoAdicRoot(Math.log2(n));
-  const powers = new Array<Fp>(n);
+  const powers = Array.from<Fp>({ length: n }).fill(0n);
   powers[0] = 1n;
   for (let i = 1; i < n; i++) powers[i] = mul(powers[i - 1]!, omega);
   return powers;
@@ -60,8 +60,8 @@ export function permutationFactors(
   assertCompatible(cc, witness);
   const { n } = cc;
   const powers = powersOnH(n);
-  const numerators = new Array<Fp>(n);
-  const denominators = new Array<Fp>(n);
+  const numerators = Array.from<Fp>({ length: n }).fill(0n);
+  const denominators = Array.from<Fp>({ length: n }).fill(0n);
   for (let row = 0; row < n; row++) {
     const idA = powers[row]!;
     const idB = mul(K1, idA);
@@ -90,8 +90,8 @@ export function buildGrandProduct(
   const { n } = cc;
   const { numerators, denominators } = permutationFactors(cc, witness, beta, gamma);
 
-  const z = new Array<Fp>(n).fill(0n);
-  const partials = new Array<Fp>(n).fill(0n);
+  const z = Array.from<Fp>({ length: n }).fill(0n);
+  const partials = Array.from<Fp>({ length: n }).fill(0n);
   z[0] = 1n;
   let running = 1n;
   for (let row = 0; row < n; row++) {

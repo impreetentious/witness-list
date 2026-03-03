@@ -22,6 +22,178 @@ body {
   font-family: var(--font-ui);
 }
 
+button,
+input,
+select {
+  font: inherit;
+}
+
+.workshop {
+  margin: 0 auto;
+  max-width: 78rem;
+  padding: 2.5rem 1.25rem 4rem;
+}
+
+.workshop-hero {
+  max-width: 48rem;
+}
+
+.workshop-hero h1 {
+  font-size: clamp(2.1rem, 6vw, 4.5rem);
+  letter-spacing: -0.055em;
+  line-height: 0.95;
+  margin: 0.5rem 0 1rem;
+}
+
+.workshop-hero p:last-child {
+  line-height: 1.55;
+  max-width: 60ch;
+}
+
+.workshop-toolbar,
+.preset-picker,
+.input-row,
+.mode-bar,
+.inspector-tabs {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.workshop-toolbar {
+  border-block: 1px solid color-mix(in srgb, var(--ink) 16%, transparent);
+  justify-content: space-between;
+  margin-top: 1.75rem;
+  padding: 0.8rem 0;
+}
+
+.preset-picker button,
+.workshop-toolbar select,
+.structured-inputs input,
+.structured-inputs select,
+.mode-bar input,
+.inspector button,
+.inspector select {
+  border: 1px solid color-mix(in srgb, var(--ink) 30%, transparent);
+  background: white;
+  color: var(--ink);
+  padding: 0.4rem 0.55rem;
+}
+
+.preset-picker button {
+  cursor: pointer;
+}
+
+.preset-picker button.active,
+.inspector-tabs button.active {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: white;
+}
+
+.zk-toggle,
+.workshop-toolbar > label,
+.mode-bar label {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+}
+
+.structured-inputs,
+.security-readout,
+.m4-reference {
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+  margin-top: 1.5rem;
+  padding: 1.15rem 1.25rem;
+}
+
+.structured-inputs h2,
+.security-readout h2 {
+  margin: 0.25rem 0 0.8rem;
+}
+
+.structured-inputs label {
+  display: grid;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  gap: 0.35rem;
+}
+
+.structured-inputs input {
+  min-width: 7rem;
+}
+
+.sudoku-grid {
+  display: grid;
+  gap: 0.5rem;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  max-width: 42rem;
+}
+
+.sudoku-grid label:nth-child(4n + 1),
+.sudoku-grid label:nth-child(4n + 2) {
+  border-left: 2px solid color-mix(in srgb, var(--accent) 50%, transparent);
+  padding-left: 0.35rem;
+}
+
+.sudoku-grid-9 {
+  grid-template-columns: repeat(9, minmax(4.25rem, 1fr));
+  max-width: 70rem;
+  overflow-x: auto;
+}
+
+.sudoku-grid-9 label:nth-child(3n + 1) {
+  border-left: 2px solid color-mix(in srgb, var(--accent) 60%, transparent);
+  padding-left: 0.35rem;
+}
+
+.range-input {
+  align-items: center;
+  grid-template-columns: auto minmax(12rem, 1fr) auto;
+  max-width: 38rem;
+}
+
+.range-input input {
+  min-width: 0;
+}
+
+.security-readout {
+  max-width: 64rem;
+}
+
+.security-readout code {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.security-readout dl,
+.root-list {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.security-readout dl div,
+.root-list div {
+  display: grid;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  gap: 0.5rem;
+  grid-template-columns: minmax(9rem, 14rem) 1fr;
+}
+
+.security-readout dd,
+.root-list dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.worker-progress {
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  margin: 1rem 0 -1rem;
+}
+
 .scaffold {
   min-height: 100vh;
   display: flex;
@@ -289,11 +461,15 @@ body {
 }
 
 .protocol-player {
-  width: min(100%, 64rem);
+  width: 100%;
   border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
   margin-top: 2rem;
   padding: 1.25rem;
   text-align: left;
+}
+
+.mode-bar {
+  margin-top: 0.8rem;
 }
 
 .player-heading {
@@ -405,12 +581,117 @@ body {
   margin: 0.85rem 0 0;
 }
 
+.inspectors {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-top: 1rem;
+}
+
+.inspector {
+  border-top: 1px solid color-mix(in srgb, var(--ink) 18%, transparent);
+  min-width: 0;
+  padding-top: 0.8rem;
+}
+
+.inspector h3 {
+  font-size: 0.9rem;
+  margin: 0 0 0.7rem;
+}
+
+.trace-scroll {
+  max-height: 18rem;
+  overflow: auto;
+}
+
+.trace-scroll table {
+  border-collapse: collapse;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  width: 100%;
+}
+
+.trace-scroll th,
+.trace-scroll td {
+  border-bottom: 1px solid color-mix(in srgb, var(--ink) 12%, transparent);
+  padding: 0.3rem;
+  text-align: left;
+}
+
+.bad-row {
+  background: color-mix(in srgb, var(--fail) 14%, transparent);
+  color: var(--fail);
+}
+
+.poly-bars {
+  align-items: end;
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
+  display: flex;
+  gap: 1px;
+  height: 9rem;
+  padding: 0.4rem;
+}
+
+.poly-bars span {
+  background: var(--accent);
+  flex: 1 1 0;
+  min-width: 2px;
+}
+
+.fri-cascade,
+.transcript-inspector > div {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0;
+  padding: 0;
+}
+
+.fri-cascade li {
+  align-items: baseline;
+  border-left: 2px solid var(--accent);
+  display: grid;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  gap: 0.25rem;
+  grid-template-columns: 2rem 1fr;
+  list-style: none;
+  padding-left: 0.5rem;
+}
+
+.fri-cascade small {
+  grid-column: 2;
+  opacity: 0.65;
+}
+
+.transcript-inspector {
+  grid-column: 1 / -1;
+}
+
+.transcript-inspector > div {
+  grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+}
+
+.transcript-inspector button {
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  overflow: hidden;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .zk-panel {
-  width: min(100%, 64rem);
+  width: 100%;
   border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
   margin-top: 2rem;
   padding: 1.25rem;
   text-align: left;
+}
+
+.m4-reference {
+  margin: 0 auto 1.25rem;
+  max-width: 78rem;
 }
 
 .zk-panel h2 {
@@ -462,6 +743,208 @@ body {
   color: var(--accent);
 }
 
+.witness-script {
+  border: 1px solid color-mix(in srgb, var(--ink) 18%, transparent);
+  margin: 1.25rem 0;
+  padding: 1.25rem;
+  text-align: left;
+}
+
+.script-heading {
+  align-items: start;
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+}
+
+.script-heading h2 {
+  margin: 0.2rem 0 0.45rem;
+}
+
+.script-heading p {
+  margin-bottom: 0;
+  max-width: 48rem;
+}
+
+.script-heading select {
+  display: block;
+  margin-top: 0.3rem;
+}
+
+.script-editor {
+  border: 1px solid color-mix(in srgb, var(--ink) 24%, transparent);
+  margin-top: 1rem;
+  max-height: 24rem;
+  overflow: auto;
+}
+
+.script-editor .cm-editor {
+  background: color-mix(in srgb, var(--paper) 88%, var(--accent));
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  min-height: 14rem;
+}
+
+.script-editor .cm-content {
+  caret-color: var(--accent);
+  padding: 0.9rem;
+}
+
+.script-editor .cm-focused {
+  outline: 2px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  outline-offset: -2px;
+}
+
+.script-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  margin-top: 0.75rem;
+}
+
+.script-actions button {
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: white;
+  cursor: pointer;
+  font: inherit;
+  padding: 0.5rem 0.7rem;
+}
+
+.course-mode {
+  border: 1px solid color-mix(in srgb, var(--accent) 28%, transparent);
+  margin: 1.25rem 0;
+  padding: 1rem 1.25rem;
+  text-align: left;
+}
+
+.course-heading {
+  align-items: center;
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+}
+
+.course-heading h2 {
+  margin: 0.2rem 0 0;
+}
+
+.course-heading button {
+  border: 1px solid var(--accent);
+  background: var(--paper);
+  color: var(--accent);
+  cursor: pointer;
+  font: inherit;
+  padding: 0.45rem 0.65rem;
+}
+
+.lesson-list {
+  display: grid;
+  gap: 0.45rem;
+  list-style: none;
+  margin: 1rem 0 0;
+  padding: 0;
+}
+
+.lesson-list li {
+  border-left: 2px solid color-mix(in srgb, var(--ink) 24%, transparent);
+  padding: 0.5rem 0.75rem;
+}
+
+.lesson-list li.complete {
+  border-left-color: var(--pass);
+  background: color-mix(in srgb, var(--pass) 8%, transparent);
+}
+
+.lesson-list label {
+  align-items: start;
+  display: grid;
+  gap: 0.65rem;
+  grid-template-columns: auto 1fr;
+}
+
+.lesson-list strong,
+.lesson-list small {
+  display: block;
+}
+
+.lesson-list small {
+  color: var(--accent);
+  margin-top: 0.15rem;
+}
+
+.lesson-list p {
+  margin: 0.35rem 0 0;
+}
+
+.zk-histogram-demo {
+  border-block: 1px solid color-mix(in srgb, var(--ink) 14%, transparent);
+  margin: 1rem 0;
+  padding: 1rem 0;
+}
+
+.zk-histogram-heading {
+  align-items: start;
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+}
+
+.zk-histogram-heading h3,
+.zk-histogram-heading p {
+  margin: 0 0 0.35rem;
+}
+
+.zk-histogram-heading label {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+.zk-histogram {
+  align-items: end;
+  display: grid;
+  gap: 0.3rem;
+  grid-template-columns: repeat(16, minmax(0, 1fr));
+  height: 9rem;
+  margin-top: 0.8rem;
+}
+
+.zk-histogram > div {
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  justify-content: end;
+}
+
+.zk-histogram span {
+  background: var(--accent);
+  display: block;
+  min-height: 2px;
+  width: 100%;
+}
+
+.zk-histogram small {
+  font-family: var(--font-mono);
+  margin-top: 0.2rem;
+}
+
+.shared-script pre {
+  background: color-mix(in srgb, var(--ink) 5%, transparent);
+  overflow: auto;
+  padding: 0.75rem;
+  white-space: pre;
+}
+
+.trace-window-controls {
+  align-items: center;
+  display: flex;
+  gap: 0.5rem;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+}
+
 @media (max-width: 720px) {
   .canvas-heading,
   .canvas-layout {
@@ -503,5 +986,42 @@ body {
   .zk-ledger div {
     grid-template-columns: 1fr;
     gap: 0.1rem;
+  }
+
+  .workshop-toolbar,
+  .inspectors {
+    display: block;
+  }
+
+  .script-heading {
+    display: block;
+  }
+
+  .course-heading {
+    align-items: start;
+    display: block;
+  }
+
+  .course-heading button {
+    margin-top: 0.75rem;
+  }
+
+  .script-heading label {
+    display: block;
+    margin-top: 0.75rem;
+  }
+
+  .workshop-toolbar > * + *,
+  .inspectors > * + * {
+    margin-top: 0.75rem;
+  }
+
+  .sudoku-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .security-readout dl div,
+  .root-list div {
+    grid-template-columns: 1fr;
   }
 }

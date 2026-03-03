@@ -9,7 +9,7 @@ import { K1, K2 } from './permutation';
 
 function domainPowers(n: number): Fp[] {
   const omega = twoAdicRoot(Math.log2(n));
-  const powers = new Array<Fp>(n);
+  const powers = Array.from<Fp>({ length: n }).fill(0n);
   powers[0] = 1n;
   for (let row = 1; row < n; row++) powers[row] = mul(powers[row - 1]!, omega);
   return powers;

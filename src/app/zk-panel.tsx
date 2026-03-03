@@ -1,8 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { evalAt } from '@/zk/poly';
-import { blind, simulateTranscript } from '@/zk/zkmode';
+import { blind, seededFieldSource, simulateTranscript } from '@/zk/zkmode';
 import type { TranscriptEntry } from '@/zk/types';
 import type { ProofTrace } from '@/zk/types';
 
@@ -14,10 +14,20 @@ function seededValues(start: bigint): () => bigint {
 export function ZkPanel({ trace, onRunZk }: { trace?: ProofTrace; onRunZk?: () => void }) {
   const [entries, setEntries] = useState<TranscriptEntry[]>();
   const [error, setError] = useState<string>();
+  const [histogramZk, setHistogramZk] = useState(true);
   const params = { n: 8, blowup: 8, queries: 4, zk: true };
   const polynomial = [3n, 1n, 4n];
   const first = blind(polynomial, 8, params, seededValues(10n));
   const second = blind(polynomial, 8, params, seededValues(20n));
+  const histogram = useMemo(() => {
+    const buckets = Array.from({ length: 16 }, () => 0);
+    for (let replay = 0; replay < 200; replay++) {
+      const candidate = blind(polynomial, 8, { ...params, zk: histogramZk }, seededFieldSource(replay + 1));
+      buckets[Number(evalAt(candidate, 7n) & 15n)]!++;
+    }
+    return buckets;
+  }, [histogramZk]);
+  const histogramMax = Math.max(...histogram);
 
   async function simulate(): Promise<void> {
     setError(undefined);
@@ -47,6 +57,16 @@ export function ZkPanel({ trace, onRunZk }: { trace?: ProofTrace; onRunZk?: () =
         <div><dt>Blinded run B P′(7)</dt><dd>{evalAt(second, 7n).toString()}</dd></div>
         <div><dt>Trace values P(ωⁱ)</dt><dd>unchanged, because Z<sub>H</sub>(ωⁱ) = 0</dd></div>
       </dl>
+      <div className="zk-histogram-demo">
+        <div className="zk-histogram-heading">
+          <div><h3>200 seeded off-domain openings</h3><p>Low-four-bit buckets make the contrast visible; this is a teaching visualization, not a statistical ZK proof.</p></div>
+          <label><input type="checkbox" checked={histogramZk} onChange={(event) => setHistogramZk(event.target.checked)} /> blinding on</label>
+        </div>
+        <div className="zk-histogram" role="img" aria-label={`Histogram of 200 seeded openings with blinding ${histogramZk ? 'on' : 'off'}`}>
+          {histogram.map((count, bucket) => <div key={bucket} title={`bucket ${bucket}: ${count}`}><span style={{ height: `${Math.max(2, count / histogramMax * 100)}%` }} /><small>{bucket.toString(16)}</small></div>)}
+        </div>
+        <p className="mono">{histogramZk ? 'Blinding ON: openings spread across residue buckets.' : 'Blinding OFF: the same opening repeats in one bucket, exposing the visible structure.'}</p>
+      </div>
       {trace?.proof.params.zk === true
         ? <p className="pass">This replay is blinded: {trace.proof.tRoots.length} quotient commitments and {trace.proof.friLayerRoots.length} FRI layers are bound into the verified proof.</p>
         : <><p className="mono">No blinded replay is selected. Generate one to compare its off-domain proof openings.</p>{onRunZk !== undefined && <button type="button" onClick={onRunZk}>Generate Blinded Replay</button>}</>}

@@ -87,7 +87,7 @@ export async function buildTree(leaves: Fp[][], domainSep: string): Promise<Merk
 
   while (levels[levels.length - 1]!.length > 1) {
     const previous = levels[levels.length - 1]!;
-    const parents = new Array<Uint8Array>(previous.length >> 1);
+    const parents: Uint8Array[] = Array.from({ length: previous.length >> 1 }, () => new Uint8Array());
     for (let i = 0; i < previous.length; i += 2) {
       parents[i >> 1] = await hashNode(previous[i]!, previous[i + 1]!);
     }

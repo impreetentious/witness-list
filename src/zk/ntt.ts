@@ -69,7 +69,7 @@ export function cosetEvaluate(coeffs: Fp[], domainSize: number): Fp[] {
   log2PowerOfTwo(domainSize, 'coset evaluation domain');
   if (coeffs.length > domainSize) throw new Error('coset evaluation domain is smaller than the polynomial');
 
-  const shifted = new Array<Fp>(domainSize).fill(0n);
+  const shifted = Array.from<Fp>({ length: domainSize }).fill(0n);
   let generatorPower = 1n;
   for (let i = 0; i < coeffs.length; i++) {
     shifted[i] = mul(coeffs[i]!, generatorPower);

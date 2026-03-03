@@ -60,7 +60,7 @@ export function inv(a: Fp): Fp {
  */
 export function batchInverse(xs: readonly Fp[]): Fp[] {
   const n = xs.length;
-  const out = new Array<Fp>(n);
+  const out = Array.from<Fp>({ length: n }).fill(0n);
   let acc = 1n;
   for (let i = 0; i < n; i++) {
     out[i] = acc;
