@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   addEdge,
   Background,
@@ -133,13 +133,25 @@ function canvasCircuit(nodes: GateNode[], edges: Edge[]): Circuit {
   };
 }
 
-const pythagoreanCanvas = fromCircuit(pythagorean);
+export interface CircuitCanvasProps {
+  circuit?: Circuit;
+  onUseCircuit?: (circuit: Circuit) => void;
+}
 
-export function CircuitCanvas() {
-  const [nodes, setNodes, onNodesChange] = useNodesState<GateNode>(pythagoreanCanvas.nodes);
-  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>(pythagoreanCanvas.edges);
+export function CircuitCanvas({ circuit = pythagorean, onUseCircuit }: CircuitCanvasProps) {
+  const initial = fromCircuit(circuit);
+  const [nodes, setNodes, onNodesChange] = useNodesState<GateNode>(initial.nodes);
+  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>(initial.edges);
   const [selectedId, setSelectedId] = useState<string>();
   const [compileStatus, setCompileStatus] = useState<string>('Pythagorean preset loaded. You can move gates, reconnect wires, or start empty.');
+
+  useEffect(() => {
+    const next = fromCircuit(circuit);
+    setNodes(next.nodes);
+    setEdges(next.edges);
+    setSelectedId(undefined);
+    setCompileStatus(`${circuit.name} loaded on the canvas.`);
+  }, [circuit, setEdges, setNodes]);
 
   const addGate = useCallback((op: GateOp) => {
     setNodes((current) => {
@@ -169,10 +181,11 @@ export function CircuitCanvas() {
       const circuit = canvasCircuit(nodes, edges);
       const compiled = await compile(circuit);
       setCompileStatus(`Compiled ${compiled.rows.length} PLONK rows (n = ${compiled.n}); circuit digest is bound into the proof transcript.`);
+      onUseCircuit?.(circuit);
     } catch (caught) {
       setCompileStatus(caught instanceof Error ? caught.message : 'The canvas could not be compiled.');
     }
-  }, [edges, nodes]);
+  }, [edges, nodes, onUseCircuit]);
 
   const reset = useCallback((preset: boolean) => {
     const next = preset ? fromCircuit(pythagorean) : { nodes: [] as GateNode[], edges: [] as Edge[] };

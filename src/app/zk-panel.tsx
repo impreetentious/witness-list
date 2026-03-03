@@ -4,13 +4,14 @@ import { useState } from 'react';
 import { evalAt } from '@/zk/poly';
 import { blind, simulateTranscript } from '@/zk/zkmode';
 import type { TranscriptEntry } from '@/zk/types';
+import type { ProofTrace } from '@/zk/types';
 
 function seededValues(start: bigint): () => bigint {
   let value = start;
   return () => value++;
 }
 
-export function ZkPanel() {
+export function ZkPanel({ trace, onRunZk }: { trace?: ProofTrace; onRunZk?: () => void }) {
   const [entries, setEntries] = useState<TranscriptEntry[]>();
   const [error, setError] = useState<string>();
   const params = { n: 8, blowup: 8, queries: 4, zk: true };
@@ -33,13 +34,12 @@ export function ZkPanel() {
       <h2 id="zk-title">What the verifier learns — and what this build does not yet claim</h2>
       <p>
         Blinding adds Z<sub>H</sub>(X)·r(X), so it leaves every trace-domain constraint unchanged
-        while changing off-domain openings. The current full prover remains explicitly
-        <strong> unblinded</strong>; this is an inspectable isolated demonstration.
+        while changing off-domain openings. Blinded proofs use additional positional quotient chunks and
+        a matching FRI degree bound; the verifier checks that full path locally.
       </p>
       <p className="caveat">
-        The simulated transcript below is an <strong>illustration of the ZK definition, not a formal proof</strong>.
-        It uses no witness, but it is not presented as a verifier-valid proof until the complete backwards
-        simulator and blinded DEEP/FRI pipeline land.
+        The sampled no-witness transcript below remains an <strong>illustration of the ZK definition, not a formal proof</strong>.
+        It is deliberately separate from the verifier-valid blinded proof, so the UI never overclaims a simulator proof.
       </p>
       <dl className="zk-ledger">
         <div><dt>Original P(7)</dt><dd>{evalAt(polynomial, 7n).toString()}</dd></div>
@@ -47,6 +47,9 @@ export function ZkPanel() {
         <div><dt>Blinded run B P′(7)</dt><dd>{evalAt(second, 7n).toString()}</dd></div>
         <div><dt>Trace values P(ωⁱ)</dt><dd>unchanged, because Z<sub>H</sub>(ωⁱ) = 0</dd></div>
       </dl>
+      {trace?.proof.params.zk === true
+        ? <p className="pass">This replay is blinded: {trace.proof.tRoots.length} quotient commitments and {trace.proof.friLayerRoots.length} FRI layers are bound into the verified proof.</p>
+        : <><p className="mono">No blinded replay is selected. Generate one to compare its off-domain proof openings.</p>{onRunZk !== undefined && <button type="button" onClick={onRunZk}>Generate Blinded Replay</button>}</>}
       <button type="button" onClick={simulate}>Sample No-Witness Transcript Illustration</button>
       {error !== undefined && <p className="failure">{error}</p>}
       {entries !== undefined && (
