@@ -1,7 +1,7 @@
 {
   "name": "witness-list",
   "private": true,
-  "version": "0.3.6",
+  "version": "0.3.7",
   "description": "Witness List — a zero-knowledge proof workshop. Build a claim, prove it, try to cheat.",
   "scripts": {
     "dev": "next dev",
@@ -16,14 +16,23 @@
   "engines": {
     "node": ">=22"
   },
+  "overrides": {
+    "next": {
+      "postcss": "^8.5.6",
+      "sharp": "^0.34.5"
+    }
+  },
   "dependencies": {
+    "@codemirror/commands": "^6.10.2",
+    "@codemirror/language": "^6.12.1",
+    "@codemirror/state": "^6.5.4",
+    "@codemirror/view": "^6.39.14",
     "@fontsource-variable/inter": "^5.2.8",
     "@fontsource/jetbrains-mono": "^5.2.8",
     "@xyflow/react": "^12.10.0",
     "next": "^16.1.6",
     "react": "^19.2.4",
-    "react-dom": "^19.2.4",
-    "zustand": "^5.0.11"
+    "react-dom": "^19.2.4"
   },
   "devDependencies": {
     "@types/node": "^24.10.13",
