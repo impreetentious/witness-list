@@ -1,6 +1,8 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { FieldElement } from '@/app/field-element';
+import { formatFieldDecimal, formatFieldHex, formatFpDecimal, formatFpHex } from '@/app/format-field';
 import type { CheckResult, ProofTrace } from '@/zk/types';
 import type { Fp2 } from '@/zk/fp2';
 
@@ -44,21 +46,33 @@ type LiveStages = {
 
 function field(value: bigint | Fp2 | undefined): string {
   if (value === undefined) return '';
-  return typeof value === 'bigint' ? value.toString() : `${value.c0} + ${value.c1}u`;
+  return formatFieldDecimal(value);
+}
+
+function fieldTitle(value: bigint | Fp2 | undefined): string {
+  if (value === undefined) return '';
+  return formatFieldHex(value);
 }
 
 function nonzero(value: bigint | Fp2): boolean {
   return typeof value === 'bigint' ? value !== 0n : value.c0 !== 0n || value.c1 !== 0n;
 }
 
+function FieldText({ value }: { value: bigint | Fp2 | undefined }): ReactNode {
+  if (value === undefined) return null;
+  return <FieldElement value={value} />;
+}
+
 export interface ProtocolPlayerProps {
   trace?: ProofTrace;
   checks: CheckResult[];
   running: boolean;
-  /** When set (e.g. verify-only share load), jump the player to this stage. */
+  /** When set (e.g. verify-only share load or course deep link), jump the player to this stage. */
   focusStage?: number;
   /** Prefer the verifier-only inspector surface (no witness columns). */
   preferVerifierView?: boolean;
+  /** Stable key so repeated deep-links to the same stage still retarget the rail. */
+  focusToken?: number;
   onRun: () => void;
   onShare: () => void;
   onAttackWitness: () => void;
@@ -92,6 +106,7 @@ export function ProtocolPlayer({
   running,
   focusStage,
   preferVerifierView = false,
+  focusToken = 0,
   onRun,
   onShare,
   onAttackWitness,
@@ -113,7 +128,7 @@ export function ProtocolPlayer({
     if (focusStage === undefined) return;
     setCurrent(Math.max(0, Math.min(stages.length - 1, focusStage)));
     if (preferVerifierView) setVerifierView(true);
-  }, [focusStage, preferVerifierView, trace?.proof.circuitDigest]);
+  }, [focusStage, focusToken, preferVerifierView, trace?.proof.circuitDigest]);
 
   useEffect(() => {
     if (!autoplay || trace === undefined) return;
@@ -124,20 +139,30 @@ export function ProtocolPlayer({
   const selectedQuery = trace?.proof.queries[Math.min(queryIndex, Math.max(0, (trace?.proof.queries.length ?? 1) - 1))];
   const coefficients = live?.wirePolynomials?.[poly] ?? [];
   const rows = live?.witness;
-  const liveData = useMemo(() => {
-    if (trace === undefined) return [] as Array<[string, string]>;
+  const liveData = useMemo((): Array<[string, ReactNode]> => {
+    if (trace === undefined) return [];
     if (current === 3) return [['wire root', root(trace.proof.wiresRoot.bytes)], ['LDE size', String(trace.proof.params.n * trace.proof.params.blowup)]];
-    if (current === 4) return [['β', field(live?.beta)], ['γ', field(live?.gamma)]];
-    if (current === 5) return [['copy Z partial products', (live?.grandProduct?.partials ?? []).slice(0, 8).map(field).join(', ')], ['lookup argument', live?.lookupGrandProduct?.mode ?? 'not used'], ['lookup Z final', field(live?.lookupGrandProduct?.partials.at(-1))]];
-    if (current === 7) return [['α', field(live?.alpha)]];
+    if (current === 4) return [['β', <FieldText key="beta" value={live?.beta} />], ['γ', <FieldText key="gamma" value={live?.gamma} />]];
+    if (current === 5) {
+      const partials = live?.grandProduct?.partials ?? [];
+      return [
+        ['copy Z partial products', <span key="z" className="field-list" title={partials.slice(0, 8).map(fieldTitle).join(', ')}>{partials.slice(0, 8).map(field).join(', ')}</span>],
+        ['lookup argument', live?.lookupGrandProduct?.mode ?? 'not used'],
+        ['lookup Z final', <FieldText key="zl" value={live?.lookupGrandProduct?.partials.at(-1)} />],
+      ];
+    }
+    if (current === 7) return [['α', <FieldText key="alpha" value={live?.alpha} />]];
     if (current === 8) return [['nonzero remainder rows', trace.quotientRemainder.flatMap((value, row) => nonzero(value) ? [row] : []).join(', ') || 'none']];
     if (current === 9) return trace.proof.tRoots.map((value, index) => [`t${index} root`, root(value.bytes)]);
-    if (current === 10) return [['ζ', field(live?.zeta)], ...trace.proof.openings.slice(0, 6).map((opening) => [opening.label, field(opening.value)] as [string, string])];
-    if (current === 12) return [['ρ', field(live?.rho)], ['committed values batched', String(trace.proof.openings.length - 3)]];
-    if (current === 13) return [['FRI roots', String(trace.proof.friLayerRoots.length)], ['final coefficients', trace.proof.friFinalCoeffs.slice(0, 8).map(field).join(', ')]];
+    if (current === 10) return [['ζ', <FieldText key="zeta" value={live?.zeta} />], ...trace.proof.openings.slice(0, 6).map((opening) => [opening.label, <FieldElement key={opening.label} value={opening.value} />] as [string, ReactNode])];
+    if (current === 12) return [['ρ', <FieldText key="rho" value={live?.rho} />], ['committed values batched', String(trace.proof.openings.length - 3)]];
+    if (current === 13) {
+      const coeffs = trace.proof.friFinalCoeffs.slice(0, 8);
+      return [['FRI roots', String(trace.proof.friLayerRoots.length)], ['final coefficients', <span key="fri" className="field-list" title={coeffs.map(fieldTitle).join(', ')}>{coeffs.map(field).join(', ')}</span>]];
+    }
     if (current === 14) return [
-      ...(trace.proof.grindingNonce === undefined ? [] : [['anti-grinding nonce', String(trace.proof.grindingNonce)] as [string, string]]),
-      ...trace.proof.queries.map((query, index) => [`query ${index}`, `D[${query.index}], ${query.friLayers.length} folds`] as [string, string]),
+      ...(trace.proof.grindingNonce === undefined ? [] : [['anti-grinding nonce', String(trace.proof.grindingNonce)] as [string, ReactNode]]),
+      ...trace.proof.queries.map((query, index) => [`query ${index}`, `D[${query.index}], ${query.friLayers.length} folds`] as [string, ReactNode]),
     ];
     if (current === 15) return checks.map((check) => [check.id, `${check.ok ? 'pass' : 'fail'} — ${check.detail}`]);
     return [['trace rows n', String(trace.proof.params.n)], ['circuit digest', root(trace.proof.circuitDigest)]];
@@ -194,7 +219,23 @@ export function ProtocolPlayer({
 }
 
 function LookupInspector({ lookup }: { lookup: NonNullable<LiveStages['lookupGrandProduct']> }) {
-  return <article className="inspector"><h3>Lookup grand product</h3><p><strong>{lookup.mode === 'membership' ? 'Plookup sorted concatenation' : 'Tagged multiset equality'}</strong></p><p className="mono">Z partials: {lookup.partials.slice(0, 12).map(field).join(' · ')}</p>{lookup.h1 !== undefined && <p className="mono">h₁: {lookup.h1.slice(0, 12).join(', ')}<br />h₂: {lookup.h2?.slice(0, 12).join(', ')}</p>}</article>;
+  const partials = lookup.partials.slice(0, 12);
+  const h1 = lookup.h1?.slice(0, 12) ?? [];
+  const h2 = lookup.h2?.slice(0, 12) ?? [];
+  return (
+    <article className="inspector">
+      <h3>Lookup grand product</h3>
+      <p><strong>{lookup.mode === 'membership' ? 'Plookup sorted concatenation' : 'Tagged multiset equality'}</strong></p>
+      <p className="mono field-list" title={partials.map(fieldTitle).join(' · ')}>Z partials: {partials.map(field).join(' · ')}</p>
+      {lookup.h1 !== undefined && (
+        <p className="mono">
+          h₁: <span className="field-list" title={h1.map(formatFpHex).join(', ')}>{h1.map(formatFpDecimal).join(', ')}</span>
+          <br />
+          h₂: <span className="field-list" title={h2.map(formatFpHex).join(', ')}>{h2.map(formatFpDecimal).join(', ')}</span>
+        </p>
+      )}
+    </article>
+  );
 }
 
 function TraceInspector({ a, b, c, remainder }: { a: bigint[]; b: bigint[]; c: bigint[]; remainder: ProofTrace['quotientRemainder'] }) {
@@ -207,12 +248,65 @@ function TraceInspector({ a, b, c, remainder }: { a: bigint[]; b: bigint[]; c: b
   }, [firstBadRow]);
   const start = Math.min(page, pageCount - 1) * pageSize;
   const visible = a.slice(start, start + pageSize);
-  return <article className="inspector"><h3>Trace table</h3>{pageCount > 1 && <div className="trace-window-controls"><button type="button" onClick={() => setPage((current) => Math.max(0, current - 1))} disabled={page === 0}>Previous rows</button><span className="mono">rows {start}–{Math.min(a.length - 1, start + pageSize - 1)} of {a.length}</span><button type="button" onClick={() => setPage((current) => Math.min(pageCount - 1, current + 1))} disabled={page >= pageCount - 1}>Next rows</button></div>}<div className="trace-scroll"><table><thead><tr><th>row</th><th>a</th><th>b</th><th>c</th><th>C(ωⁱ)</th></tr></thead><tbody>{visible.map((value, index) => { const row = start + index; const r = remainder[row]; const bad = r !== undefined && (typeof r === 'bigint' ? r !== 0n : r.c0 !== 0n || r.c1 !== 0n); const shown = typeof r === 'bigint' ? r.toString() : r === undefined ? '—' : `${r.c0} + ${r.c1}u`; return <tr key={row} className={bad ? 'bad-row' : ''}><td>{row}</td><td>{value}</td><td>{b[row]}</td><td>{c[row]}</td><td>{shown}</td></tr>; })}</tbody></table></div></article>;
+  return (
+    <article className="inspector">
+      <h3>Trace table</h3>
+      {pageCount > 1 && (
+        <div className="trace-window-controls">
+          <button type="button" onClick={() => setPage((current) => Math.max(0, current - 1))} disabled={page === 0}>Previous rows</button>
+          <span className="mono">rows {start}–{Math.min(a.length - 1, start + pageSize - 1)} of {a.length}</span>
+          <button type="button" onClick={() => setPage((current) => Math.min(pageCount - 1, current + 1))} disabled={page >= pageCount - 1}>Next rows</button>
+        </div>
+      )}
+      <div className="trace-scroll">
+        <table>
+          <thead><tr><th>row</th><th>a</th><th>b</th><th>c</th><th>C(ωⁱ)</th></tr></thead>
+          <tbody>
+            {visible.map((value, index) => {
+              const row = start + index;
+              const r = remainder[row];
+              const bad = r !== undefined && (typeof r === 'bigint' ? r !== 0n : r.c0 !== 0n || r.c1 !== 0n);
+              const bValue = b[row] ?? 0n;
+              const cValue = c[row] ?? 0n;
+              return (
+                <tr key={row} className={bad ? 'bad-row' : ''}>
+                  <td>{row}</td>
+                  <td><FieldElement value={value} /></td>
+                  <td><FieldElement value={bValue} /></td>
+                  <td><FieldElement value={cValue} /></td>
+                  <td>{r === undefined ? '—' : <FieldElement value={r} />}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </article>
+  );
 }
 
 function PolynomialInspector({ coefficients, poly, onPoly }: { coefficients: bigint[]; poly: 'a' | 'b' | 'c'; onPoly: (poly: 'a' | 'b' | 'c') => void }) {
   const max = coefficients.reduce((highest, value) => value > highest ? value : highest, 1n);
-  return <article className="inspector"><h3>Polynomial inspector</h3><div className="inspector-tabs">{(['a', 'b', 'c'] as const).map((name) => <button key={name} type="button" className={name === poly ? 'active' : ''} onClick={() => onPoly(name)}>{name}(X)</button>)}</div><div className="poly-bars">{coefficients.slice(0, 64).map((value, index) => <span key={index} title={`coefficient ${index}: ${value}`} style={{ height: `${Math.max(3, Number((value * 100n) / max))}%` }} />)}</div><p className="mono">coefficients 0…{Math.max(0, coefficients.length - 1)}; hover a bar for its exact field value.</p></article>;
+  return (
+    <article className="inspector">
+      <h3>Polynomial inspector</h3>
+      <div className="inspector-tabs">
+        {(['a', 'b', 'c'] as const).map((name) => (
+          <button key={name} type="button" className={name === poly ? 'active' : ''} onClick={() => onPoly(name)}>{name}(X)</button>
+        ))}
+      </div>
+      <div className="poly-bars">
+        {coefficients.slice(0, 64).map((value, index) => (
+          <span
+            key={index}
+            title={`coefficient ${index}: ${formatFpDecimal(value)} (${formatFpHex(value)})`}
+            style={{ height: `${Math.max(3, Number((value * 100n) / max))}%` }}
+          />
+        ))}
+      </div>
+      <p className="mono">coefficients 0…{Math.max(0, coefficients.length - 1)}; hover a bar for thin-spaced decimal and hex.</p>
+    </article>
+  );
 }
 
 function MerkleInspector({ roots, query, queryIndex, queryCount, onQuery }: { roots: [string, Uint8Array][]; query: ProofTrace['proof']['queries'][number] | undefined; queryIndex: number; queryCount: number; onQuery: (index: number) => void }) {
@@ -233,5 +327,22 @@ function ProofSizeInspector({ trace }: { trace: ProofTrace }) {
 }
 
 function TranscriptInspector({ entries, onJump }: { entries: ProofTrace['transcript']; onJump: (label: string) => void }) {
-  return <article className="inspector transcript-inspector"><h3>Transcript timeline</h3><div>{entries.map((entry, index) => <button key={`${entry.kind}-${entry.label}-${index}`} type="button" onClick={() => onJump(entry.label)}><code>{entry.kind}</code> {entry.label}{entry.extensionValue === undefined ? '' : ` = ${field(entry.extensionValue)}`}</button>)}</div></article>;
+  return (
+    <article className="inspector transcript-inspector">
+      <h3>Transcript timeline</h3>
+      <div>
+        {entries.map((entry, index) => (
+          <button
+            key={`${entry.kind}-${entry.label}-${index}`}
+            type="button"
+            title={entry.extensionValue === undefined ? undefined : fieldTitle(entry.extensionValue)}
+            onClick={() => onJump(entry.label)}
+          >
+            <code>{entry.kind}</code> {entry.label}
+            {entry.extensionValue === undefined ? '' : <> = <FieldElement value={entry.extensionValue} /></>}
+          </button>
+        ))}
+      </div>
+    </article>
+  );
 }

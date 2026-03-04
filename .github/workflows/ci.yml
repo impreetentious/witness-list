@@ -24,6 +24,7 @@ jobs:
           node-version: 22.22.0
           cache: npm
       - run: npm ci
+      - run: npm run lint
       # next build type-checks the whole project (tsconfig include covers zk/ and tests)
       - run: npm run build
         env:
