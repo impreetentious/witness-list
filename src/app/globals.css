@@ -30,12 +30,87 @@ select {
 
 .workshop {
   margin: 0 auto;
-  max-width: 78rem;
+  max-width: 96rem;
   padding: 2.5rem 1.25rem 4rem;
 }
 
 .workshop-hero {
   max-width: 48rem;
+}
+
+.workshop-ide {
+  display: grid;
+  gap: 0.85rem;
+  grid-template-columns: minmax(16rem, 22rem) minmax(0, 1fr) minmax(14rem, 18rem);
+  grid-template-areas:
+    'author circuit bound'
+    'player player player'
+    'zk zk zk';
+  margin-top: 1.25rem;
+}
+
+.workshop-pane {
+  border: 1px solid color-mix(in srgb, var(--ink) 16%, transparent);
+  min-width: 0;
+  padding: 0.85rem;
+}
+
+.workshop-pane-author { grid-area: author; }
+.workshop-pane-circuit { grid-area: circuit; }
+.workshop-pane-bound { grid-area: bound; }
+.workshop-pane-player { grid-area: player; }
+.workshop-pane-zk { grid-area: zk; }
+
+.pane-label {
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.1em;
+  margin: 0 0 0.75rem;
+  text-transform: uppercase;
+}
+
+.workshop-pane .circuit-workbench,
+.workshop-pane .protocol-player,
+.workshop-pane .zk-panel,
+.workshop-pane .security-readout,
+.workshop-pane .course-mode,
+.workshop-pane .structured-inputs,
+.workshop-pane .witness-script {
+  border: 0;
+  margin-top: 0;
+  max-width: none;
+  padding: 0;
+  width: 100%;
+}
+
+.workshop-pane .circuit-workbench {
+  margin-top: 0;
+}
+
+.workshop-pane .security-readout {
+  border: 0;
+  margin-top: 0;
+  padding: 0;
+}
+
+.field-element,
+.field-list {
+  cursor: help;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 1100px) {
+  .workshop-ide {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      'author'
+      'circuit'
+      'bound'
+      'player'
+      'zk';
+  }
 }
 
 .workshop-hero h1 {
@@ -332,6 +407,18 @@ select {
   border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
   padding: 1.25rem;
   text-align: left;
+}
+
+.workshop-pane-circuit .canvas-layout {
+  min-height: 28rem;
+}
+
+.workshop-pane-circuit .flow-shell {
+  min-height: 28rem;
+}
+
+.copy-class-edge {
+  stroke-linecap: round;
 }
 
 .canvas-heading {
@@ -854,6 +941,22 @@ select {
 .lesson-list li.complete {
   border-left-color: var(--pass);
   background: color-mix(in srgb, var(--pass) 8%, transparent);
+}
+
+.lesson-list li.active-lesson {
+  border-left-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+.lesson-open {
+  border: 1px solid var(--accent);
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  margin-top: 0.45rem;
+  padding: 0.35rem 0.55rem;
 }
 
 .lesson-list label {

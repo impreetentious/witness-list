@@ -26,6 +26,34 @@ type GateData = {
 };
 type GateNode = Node<GateData, 'gate'>;
 
+/** Stable ink palette for copy-constraint classes (one color per source wire). */
+const COPY_CLASS_COLORS = [
+  '#6d4ae0',
+  '#2e7d4f',
+  '#1a5276',
+  '#af601a',
+  '#5d6d7e',
+  '#117a65',
+  '#6c3483',
+  '#922b21',
+  '#1b4f72',
+  '#196f3d',
+] as const;
+
+function copyClassColor(sourceId: string): string {
+  let hash = 0;
+  for (let index = 0; index < sourceId.length; index++) hash = (hash * 31 + sourceId.charCodeAt(index)) >>> 0;
+  return COPY_CLASS_COLORS[hash % COPY_CLASS_COLORS.length]!;
+}
+
+function styleCopyEdge(edge: Edge): Edge {
+  const stroke = copyClassColor(edge.source);
+  return {
+    ...edge,
+    style: { ...edge.style, stroke, strokeWidth: 2 },
+    className: 'copy-class-edge',
+  };
+}
 const arity: Record<GateOp, number> = {
   pub: 0,
   priv: 0,
@@ -54,7 +82,7 @@ function fromCircuit(circuit: Circuit): { nodes: GateNode[]; edges: Edge[] } {
       position: gate.pos ?? { x: 80 + gate.id * 24, y: 100 + (gate.id % 5) * 96 },
       data: { op: gate.op, value: gate.value?.toString() },
     })),
-    edges: circuit.gates.flatMap((gate) => gate.inputs.map((input, inputIndex) => ({
+    edges: circuit.gates.flatMap((gate) => gate.inputs.map((input, inputIndex) => styleCopyEdge({
       id: `${input}-${gate.id}-${inputIndex}`,
       source: String(input),
       target: String(gate.id),
@@ -179,9 +207,16 @@ export function CircuitCanvas({ circuit = pythagorean, onUseCircuit }: CircuitCa
 
   const onConnect = useCallback((connection: Connection) => {
     if (connection.source === null || connection.target === null || connection.targetHandle === null) return;
-    setEdges((current) => addEdge({ ...connection, id: `${connection.source}-${connection.target}-${connection.targetHandle}` }, current));
+    setEdges((current) => addEdge(styleCopyEdge({
+      ...connection,
+      id: `${connection.source}-${connection.target}-${connection.targetHandle}`,
+      source: connection.source,
+      target: connection.target,
+      targetHandle: connection.targetHandle,
+    }), current));
   }, [setEdges]);
 
+  const coloredEdges = useMemo(() => edges.map(styleCopyEdge), [edges]);
   const selected = nodes.find((node) => node.id === selectedId);
   const selectedConst = selected?.data.op === 'const' ? selected : undefined;
 
@@ -219,8 +254,9 @@ export function CircuitCanvas({ circuit = pythagorean, onUseCircuit }: CircuitCa
           <p className="eyebrow">M6 circuit workbench</p>
           <h2 id="canvas-title">Build the claim before proving it</h2>
           <p>
-            Every wire is a copy-constraint class. Connect a gate&apos;s output to an input handle,
-            then compile the visible graph into deterministic PLONK rows.
+            Every wire is a copy-constraint class — matching edge colours mark the same source
+            wire. Connect a gate&apos;s output to an input handle, then compile the visible graph
+            into deterministic PLONK rows.
           </p>
         </div>
         <div className="canvas-actions">
@@ -247,7 +283,7 @@ export function CircuitCanvas({ circuit = pythagorean, onUseCircuit }: CircuitCa
         <div className="flow-shell">
           <ReactFlow
             nodes={nodes}
-            edges={edges}
+            edges={coloredEdges}
             nodeTypes={nodeTypes}
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}

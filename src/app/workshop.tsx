@@ -20,9 +20,21 @@ import { CourseMode } from './course-mode';
 import { WitnessScriptEditor } from './witness-script-editor';
 import { ZkPanel } from './zk-panel';
 import type { CompiledWitnessScript } from '@/script/witness-script';
+import { lessons, type Lesson } from '@/course/lessons';
 
 type PresetId = 'pythagorean' | 'sudoku' | 'sudoku9' | 'mimc' | 'age' | 'canvas' | 'script';
 
+/** Default FRI query count — matches the teaching-scale readout. */
+const DEFAULT_QUERIES = 32;
+
+function parseCourseDeepLink(hash: string): { lessonId?: string; stage?: number } {
+  if (/^#p(u)?=/.test(hash)) return {};
+  const lesson = /^#lesson=([\w-]+)$/.exec(hash);
+  if (lesson !== null) return { lessonId: lesson[1] };
+  const stage = /^#stage=(\d+)$/.exec(hash);
+  if (stage !== null) return { stage: Number(stage[1]) };
+  return {};
+}
 interface ScriptSession {
   compiled: CompiledWitnessScript;
   sourceValues: Map<string, string>;
@@ -109,36 +121,78 @@ export function Workshop() {
   const [shareStatus, setShareStatus] = useState<string>();
   const [attackStatus, setAttackStatus] = useState<string>();
   const [zk, setZk] = useState(false);
-  const [queries, setQueries] = useState(8);
+  const [queries, setQueries] = useState(DEFAULT_QUERIES);
   const [grindingBits, setGrindingBits] = useState(0);
   const [seed, setSeed] = useState(42);
-  const [lastParams, setLastParams] = useState<Params>({ n: 32, blowup: 8, queries: 8, zk: false });
+  const [lastParams, setLastParams] = useState<Params>({ n: 32, blowup: 8, queries: DEFAULT_QUERIES, zk: false });
   const [verifyOnly, setVerifyOnly] = useState(false);
+  const [focusStage, setFocusStage] = useState<number>();
+  const [focusToken, setFocusToken] = useState(0);
+  const [activeLessonId, setActiveLessonId] = useState<string>();
+  const readoutParams: Params = { ...lastParams, queries, grindingBits, zk };
+
+  function openLesson(lesson: Lesson, writeHash = true): void {
+    setVerifyOnly(false);
+    setFocusStage(lesson.stage);
+    setFocusToken((token) => token + 1);
+    setActiveLessonId(lesson.id);
+    if (writeHash && !/^#p(u)?=/.test(window.location.hash)) {
+      window.history.replaceState(null, '', `#lesson=${lesson.id}`);
+    }
+    window.requestAnimationFrame(() => {
+      document.getElementById('protocol-player')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  }
+
+  function openStage(stage: number, writeHash = true): void {
+    setVerifyOnly(false);
+    setFocusStage(stage);
+    setFocusToken((token) => token + 1);
+    setActiveLessonId(undefined);
+    if (writeHash && !/^#p(u)?=/.test(window.location.hash)) {
+      window.history.replaceState(null, '', `#stage=${stage}`);
+    }
+    window.requestAnimationFrame(() => {
+      document.getElementById('protocol-player')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  }
 
   useEffect(() => {
     let cancelled = false;
     async function loadSharedProof(): Promise<void> {
-      if (!/^#p(u)?=/.test(window.location.hash)) return;
-      try {
-        const payload = await decodeShare(window.location.hash);
-        const compiled = await compile(payload.circuit);
-        const result = await verify(compiled, payload.proof);
-        if (cancelled) return;
-        const values = genericValues(payload.circuit);
-        payload.circuit.publicOrder.forEach((wire, index) => values.set(wire, payload.publicInputs[index]!.toString()));
-        setSession({ id: 'canvas', title: `${payload.circuit.name} (shared)`, circuit: payload.circuit, values });
-        // Verify-only payloads carry the lean Proof, not a prover trace — stage 15
-        // still runs the checklist from `checks` without ever materializing a witness.
-        setTrace({ proof: payload.proof, transcript: [], stages: {}, quotientRemainder: [] });
-        setChecks(result.checks);
-        setLastParams(payload.proof.params);
-        setVerifyOnly(true);
-        setShareStatus(result.ok
-          ? 'Verify-only mode: this browser checked V1–V7 from the shared proof and never received a witness.'
-          : 'Verify-only mode: the shared proof failed its local verifier checklist.');
-      } catch (caught) {
-        if (!cancelled) setError(caught instanceof Error ? `Could not verify shared proof: ${caught.message}` : 'Could not verify shared proof.');
+      if (/^#p(u)?=/.test(window.location.hash)) {
+        try {
+          const payload = await decodeShare(window.location.hash);
+          const compiled = await compile(payload.circuit);
+          const result = await verify(compiled, payload.proof);
+          if (cancelled) return;
+          const values = genericValues(payload.circuit);
+          payload.circuit.publicOrder.forEach((wire, index) => values.set(wire, payload.publicInputs[index]!.toString()));
+          setSession({ id: 'canvas', title: `${payload.circuit.name} (shared)`, circuit: payload.circuit, values });
+          // Verify-only payloads carry the lean Proof, not a prover trace — stage 15
+          // still runs the checklist from `checks` without ever materializing a witness.
+          setTrace({ proof: payload.proof, transcript: [], stages: {}, quotientRemainder: [] });
+          setChecks(result.checks);
+          setLastParams(payload.proof.params);
+          setVerifyOnly(true);
+          setFocusStage(15);
+          setFocusToken((token) => token + 1);
+          setActiveLessonId(undefined);
+          setShareStatus(result.ok
+            ? 'Verify-only mode: this browser checked V1–V7 from the shared proof and never received a witness.'
+            : 'Verify-only mode: the shared proof failed its local verifier checklist.');
+        } catch (caught) {
+          if (!cancelled) setError(caught instanceof Error ? `Could not verify shared proof: ${caught.message}` : 'Could not verify shared proof.');
+        }
+        return;
       }
+      const link = parseCourseDeepLink(window.location.hash);
+      if (link.lessonId !== undefined) {
+        const lesson = lessons.find((entry) => entry.id === link.lessonId);
+        if (lesson !== undefined) openLesson(lesson, false);
+        return;
+      }
+      if (link.stage !== undefined && Number.isFinite(link.stage)) openStage(link.stage, false);
     }
     void loadSharedProof();
     return () => { cancelled = true; };
@@ -317,7 +371,7 @@ export function Workshop() {
       <header className="workshop-hero">
         <p className="eyebrow">Witness List · v1 workshop</p>
         <h1>Write a claim, prove it, try to cheat.</h1>
-        <p>Start with a five-line Witness Script or a visual circuit. Every path runs in this browser. The proof is transparent and teaching-scale; its displayed soundness estimate is conjectured, never a production-security claim.</p>
+        <p>Start with a five-line Witness Script or a visual circuit. Every path runs in this browser. The proof is transparent and teaching-scale; its displayed soundness estimate is conjectured, never a production-security claim. Default FRI queries are 32 — the live §4.11 readout tracks whatever count you select.</p>
       </header>
       <section className="workshop-toolbar" aria-label="Claim and proving controls">
         <div className="preset-picker"><span>Claim</span>{(['pythagorean', 'sudoku', 'sudoku9', 'mimc', 'age'] as const).map((id) => <button key={id} type="button" className={session.id === id ? 'active' : ''} disabled={loadingPreset} onClick={() => void choosePreset(id)}>{id === 'mimc' ? 'MiMC preimage' : id === 'age' ? 'Age ≥ 18' : id === 'sudoku9' ? 'Sudoku 9×9' : id === 'sudoku' ? 'Sudoku 4×4' : 'Pythagorean'}</button>)}</div>
@@ -325,33 +379,51 @@ export function Workshop() {
         <label>anti-grinding <select value={grindingBits} onChange={(event) => setGrindingBits(Number(event.target.value))}><option value={0}>off</option><option value={4}>2⁴ work</option><option value={8}>2⁸ work</option><option value={12}>2¹² work</option></select></label>
         <label className="zk-toggle"><input type="checkbox" checked={zk} onChange={(event) => setZk(event.target.checked)} /> blinded teaching mode</label>
       </section>
-      <WitnessScriptEditor onUseScript={useScript} />
-      <CourseMode />
       {loadingPreset && <p className="mono">Deriving the selected preset and its input mapping…</p>}
-      <StructuredInputs session={session} onChange={updateValue} onAgeChange={updateAge} onMimcChange={updateMimcPreimage} onScriptChange={updateScriptValue} />
-      <CircuitCanvas circuit={session.circuit} onUseCircuit={(circuit) => {
-        setSession({ id: 'canvas', title: circuit.name, circuit, values: genericValues(circuit) });
-        setTrace(undefined);
-        setChecks([]);
-      }} />
-      <SecurityReadout params={lastParams} />
-      {progress !== undefined && <p className="worker-progress" role="status">Worker: {progress}</p>}
-      <ProtocolPlayer
-        trace={trace}
-        checks={checks}
-        running={running}
-        focusStage={verifyOnly ? 15 : undefined}
-        preferVerifierView={verifyOnly}
-        onRun={() => { setVerifyOnly(false); void proveSelected(); }}
-        onShare={() => void share()}
-        onAttackWitness={() => { setVerifyOnly(false); void runTamperWitness(); }}
-        onAttackLeaf={() => { setVerifyOnly(false); void runTamperLeaf(); }}
-        onGrind={() => { setVerifyOnly(false); void runGrind(); }}
-        shareStatus={shareStatus}
-        error={error}
-        attackStatus={attackStatus}
-      />
-      <ZkPanel trace={trace} onRunZk={() => { setZk(true); void proveSelected(true); }} />
+      <div className="workshop-ide" aria-label="Workshop workbench">
+        <aside className="workshop-pane workshop-pane-author" aria-label="Author pane">
+          <p className="pane-label">Author</p>
+          <WitnessScriptEditor onUseScript={useScript} />
+          <CourseMode onOpenLesson={(lesson) => openLesson(lesson)} activeLessonId={activeLessonId} />
+          <StructuredInputs session={session} onChange={updateValue} onAgeChange={updateAge} onMimcChange={updateMimcPreimage} onScriptChange={updateScriptValue} />
+        </aside>
+        <section className="workshop-pane workshop-pane-circuit" aria-label="Circuit pane">
+          <p className="pane-label">Circuit</p>
+          <CircuitCanvas circuit={session.circuit} onUseCircuit={(circuit) => {
+            setSession({ id: 'canvas', title: circuit.name, circuit, values: genericValues(circuit) });
+            setTrace(undefined);
+            setChecks([]);
+          }} />
+        </section>
+        <aside className="workshop-pane workshop-pane-bound" aria-label="Bound pane">
+          <p className="pane-label">Bound</p>
+          <SecurityReadout params={readoutParams} />
+        </aside>
+        <section className="workshop-pane workshop-pane-player" aria-label="Protocol player pane" id="protocol-player">
+          <p className="pane-label">Protocol</p>
+          {progress !== undefined && <p className="worker-progress" role="status">Worker: {progress}</p>}
+          <ProtocolPlayer
+            trace={trace}
+            checks={checks}
+            running={running}
+            focusStage={verifyOnly ? 15 : focusStage}
+            focusToken={focusToken}
+            preferVerifierView={verifyOnly}
+            onRun={() => { setVerifyOnly(false); void proveSelected(); }}
+            onShare={() => void share()}
+            onAttackWitness={() => { setVerifyOnly(false); void runTamperWitness(); }}
+            onAttackLeaf={() => { setVerifyOnly(false); void runTamperLeaf(); }}
+            onGrind={() => { setVerifyOnly(false); void runGrind(); }}
+            shareStatus={shareStatus}
+            error={error}
+            attackStatus={attackStatus}
+          />
+        </section>
+        <section className="workshop-pane workshop-pane-zk" aria-label="ZK ledger pane">
+          <p className="pane-label">ZK ledger</p>
+          <ZkPanel trace={trace} onRunZk={() => { setZk(true); void proveSelected(true); }} />
+        </section>
+      </div>
     </div>
   );
 }
