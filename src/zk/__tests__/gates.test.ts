@@ -299,7 +299,7 @@ describe('M3 gates — arithmetization', () => {
       compile(age),
     ]);
     expect(pythagoreanCompiled.n).toBe(32);
-    expect(sudokuCompiled.n).toBe(512); // generic-gate baseline; fusion is a separate M3 follow-up
+    expect(sudokuCompiled.n).toBe(512); // generic-gate baseline; selector fusion is intentionally not remaining build work (§12)
     expect(mimcCompiled.n).toBe(256);
     expect(ageCompiled.n).toBe(128);
     expect(sudokuGivens).toHaveLength(4);
@@ -437,30 +437,40 @@ describe('M4/M5 gates — protocol', () => {
     expect(tamperedResult.ok).toBe(false);
     expect(tamperedResult.checks.find((check) => check.id === 'V3')?.ok).toBe(false);
   });
-  it('Z9: shared A1/A2 attack functions fail at V2/V3 for every preset across 20 replays', async () => {
+  it('Z9: shared A1/A2 attack functions fail at V2/V3 for every preset across deterministic replays', async () => {
     const mimc = await makeMimcPreset();
     const mimcPreimage = 123456789n;
     const mimcDigest = await mimcHash(mimcPreimage);
-    const cases: Array<{ circuit: typeof pythagorean; inputs: Map<number, Fp>; publicInputs: Fp[]; override: Map<number, Fp> }> = [
-      { circuit: pythagorean, inputs: new Map([[1, 5n], [2, 3n], [3, 4n]]), publicInputs: [5n], override: new Map([[4, 10n]]) },
+    const cases: Array<{ circuit: typeof pythagorean; inputs: Map<number, Fp>; publicInputs: Fp[]; override: Map<number, Fp>; seeds: number }> = [
+      { circuit: pythagorean, inputs: new Map([[1, 5n], [2, 3n], [3, 4n]]), publicInputs: [5n], override: new Map([[4, 10n]]), seeds: 20 },
       {
         circuit: sudoku,
         inputs: sudokuInputs(),
         publicInputs: sudokuGivens.map((given) => given.value),
         override: new Map([[sudokuCellWires[0]![0]!, 2n]]),
+        seeds: 20,
       },
       {
         circuit: mimc.circuit,
         inputs: new Map([[mimc.preimageWire, mimcPreimage], [mimc.digestWire, mimcDigest]]),
         publicInputs: [mimcDigest],
         override: new Map([[mimc.preimageWire, mimcPreimage + 1n]]),
+        seeds: 20,
       },
-      { circuit: age, inputs: ageInputs(), publicInputs: [], override: new Map([[agePreset.ageWire, 17n]]) },
+      { circuit: age, inputs: ageInputs(), publicInputs: [], override: new Map([[agePreset.ageWire, 17n]]), seeds: 20 },
+      // 9×9 is covered with fewer seeds here; denser honest/attack coverage lives under Z20.
+      {
+        circuit: sudoku9,
+        inputs: sudoku9Inputs(),
+        publicInputs: sudoku9Givens.map((given) => given.value),
+        override: new Map([[sudoku9CellWires[0]![2]!, 3n]]),
+        seeds: 3,
+      },
     ];
-    for (const { circuit, inputs, publicInputs, override } of cases) {
+    for (const { circuit, inputs, publicInputs, override, seeds } of cases) {
       const compiled = await compile(circuit);
       const params = { n: compiled.n, blowup: 8, queries: 2, zk: false };
-      for (let seed = 0; seed < 20; seed++) {
+      for (let seed = 0; seed < seeds; seed++) {
         const a1 = await tamperWitness(circuit, inputs, override, params, seed);
         const a1Result = await verify(compiled, a1.proof);
         expect(a1Result.ok, `${circuit.name}, A1, seed ${seed}`).toBe(false);
@@ -472,23 +482,30 @@ describe('M4/M5 gates — protocol', () => {
         expect(a2Result.checks.find((check) => check.id === 'V3')?.ok, `${circuit.name}, A2, seed ${seed}`).toBe(false);
       }
     }
-  }, 90_000);
-  it('Z8: every preset proves and verifies all seven checks across 20 deterministic replays', async () => {
+  }, 120_000);
+  it('Z8: every preset proves and verifies all seven checks across deterministic replays', async () => {
     const mimc = await makeMimcPreset();
     const mimcPreimage = 123456789n;
-    const cases: Array<{ circuit: typeof pythagorean; inputs: Map<number, Fp>; publicInputs: Fp[] }> = [
-      { circuit: pythagorean, inputs: new Map([[1, 5n], [2, 3n], [3, 4n]]), publicInputs: [5n] },
-      { circuit: sudoku, inputs: sudokuInputs(), publicInputs: sudokuGivens.map((given) => given.value) },
+    const cases: Array<{ circuit: typeof pythagorean; inputs: Map<number, Fp>; publicInputs: Fp[]; seeds: number }> = [
+      { circuit: pythagorean, inputs: new Map([[1, 5n], [2, 3n], [3, 4n]]), publicInputs: [5n], seeds: 20 },
+      { circuit: sudoku, inputs: sudokuInputs(), publicInputs: sudokuGivens.map((given) => given.value), seeds: 20 },
       {
         circuit: mimc.circuit,
         inputs: new Map([[mimc.preimageWire, mimcPreimage], [mimc.digestWire, await mimcHash(mimcPreimage)]]),
         publicInputs: [await mimcHash(mimcPreimage)],
+        seeds: 20,
       },
-      { circuit: age, inputs: ageInputs(), publicInputs: [] },
+      { circuit: age, inputs: ageInputs(), publicInputs: [], seeds: 20 },
+      {
+        circuit: sudoku9,
+        inputs: sudoku9Inputs(),
+        publicInputs: sudoku9Givens.map((given) => given.value),
+        seeds: 3,
+      },
     ];
-    for (const { circuit, inputs, publicInputs } of cases) {
+    for (const { circuit, inputs, publicInputs, seeds } of cases) {
       const compiled = await compile(circuit);
-      for (let seed = 0; seed < 20; seed++) {
+      for (let seed = 0; seed < seeds; seed++) {
         const trace = await prove(
           compiled,
           generateWitness(circuit, inputs),
@@ -501,7 +518,7 @@ describe('M4/M5 gates — protocol', () => {
         expect(result.checks.every((check) => check.ok), `${circuit.name}, seed ${seed}`).toBe(true);
       }
     }
-  }, 90_000);
+  }, 120_000);
   it('Z12 smoke: the shared A3 prover can grind a Q=1 forged proof through the real verifier', async () => {
     const result = await grindChallenge(
       pythagorean,
@@ -571,6 +588,21 @@ describe('Phase 2A gates — quadratic extension challenges', () => {
       expect(trace.transcript.find((entry) => entry.kind === 'squeeze' && entry.label === label)?.extensionValue, label).toBeDefined();
     }
     expect((await verify(compiled, trace.proof)).ok).toBe(true);
+  });
+
+  it('Z19: protocol-v1 compatibility shares still decode and verify', async () => {
+    const compiled = await compile(pythagorean);
+    const proof = (await proveV1ForCompatibility(
+      compiled,
+      generateWitness(pythagorean, new Map([[1, 5n], [2, 3n], [3, 4n]])),
+      [5n],
+      { n: compiled.n, blowup: 8, queries: 2, zk: false },
+      19,
+    )).proof;
+    expect(proof.version).toBe(1);
+    const shared = await decodeShare(await encodeShare({ circuit: pythagorean, publicInputs: [5n], proof }, false));
+    expect(shared.proof.version).toBe(1);
+    expect((await verify(await compile(shared.circuit), shared.proof)).ok).toBe(true);
   });
 });
 
@@ -776,7 +808,7 @@ describe('M8/M9 gates — ZK & sharing', () => {
     expect(await decodeShare(compressed)).toEqual(payload);
   });
 
-  it('carries canonical Witness Script provenance and binds it into the circuit digest', async () => {
+  it('Z18: canonical Witness Script provenance changes the digest and leaves the frozen v1 fingerprint untouched when absent', async () => {
     const script = await compileWitnessScript(witnessScriptExamples[0]!.source);
     const inputs = script.deriveInputs(witnessScriptExamples[0]!.inputs);
     const compiled = await compile(script.circuit);
@@ -796,5 +828,20 @@ describe('M8/M9 gates — ZK & sharing', () => {
     };
     expect(await compile(changedSource).then((result) => result.digest)).not.toEqual(compiled.digest);
     expect((await verify(await compile(changedSource), proof)).checks.find((check) => check.id === 'V1')?.ok).toBe(false);
+
+    // Provenance-free circuit keeps the frozen protocol-v1 share fingerprint (Z10).
+    expect(pythagorean.provenance).toBeUndefined();
+    const v1Compiled = await compile(pythagorean);
+    const v1Proof = (await proveV1ForCompatibility(
+      v1Compiled,
+      generateWitness(pythagorean, new Map([[1, 5n], [2, 3n], [3, 4n]])),
+      [5n],
+      { n: v1Compiled.n, blowup: 8, queries: 4, zk: false },
+      42,
+    )).proof;
+    const wire = await encodeShare({ circuit: pythagorean, publicInputs: [5n], proof: v1Proof }, false);
+    const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(wire)));
+    const fingerprint = Array.from(digest, (byte) => byte.toString(16).padStart(2, '0')).join('');
+    expect(fingerprint).toBe('d3dcada69ffeeb2a314d658c7552594af45a059f9e5cad4ce45c21df4482b401');
   });
 });

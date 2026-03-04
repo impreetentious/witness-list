@@ -23,7 +23,7 @@ export const age = agePreset.circuit;
 
 export function ageInputs(ageValue: Fp = 21n): Map<number, Fp> {
   if (ageValue < 18n || ageValue > 145n) {
-    throw new Error('Age preset accepts ages in [18, 145] so age − 18 fits in seven bits');
+    throw new Error('Age preset accepts ages in the inclusive lookup table [18, 145]');
   }
   return new Map<number, Fp>([[agePreset.ageWire, ageValue]]);
 }

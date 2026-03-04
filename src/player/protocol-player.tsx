@@ -55,6 +55,10 @@ export interface ProtocolPlayerProps {
   trace?: ProofTrace;
   checks: CheckResult[];
   running: boolean;
+  /** When set (e.g. verify-only share load), jump the player to this stage. */
+  focusStage?: number;
+  /** Prefer the verifier-only inspector surface (no witness columns). */
+  preferVerifierView?: boolean;
   onRun: () => void;
   onShare: () => void;
   onAttackWitness: () => void;
@@ -86,6 +90,8 @@ export function ProtocolPlayer({
   trace,
   checks,
   running,
+  focusStage,
+  preferVerifierView = false,
   onRun,
   onShare,
   onAttackWitness,
@@ -97,11 +103,17 @@ export function ProtocolPlayer({
 }: ProtocolPlayerProps) {
   const [current, setCurrent] = useState(0);
   const [autoplay, setAutoplay] = useState(false);
-  const [verifierView, setVerifierView] = useState(false);
+  const [verifierView, setVerifierView] = useState(preferVerifierView);
   const [poly, setPoly] = useState<'a' | 'b' | 'c'>('a');
   const [queryIndex, setQueryIndex] = useState(0);
   const live = trace?.stages as LiveStages | undefined;
   const stage = stages[current]!;
+
+  useEffect(() => {
+    if (focusStage === undefined) return;
+    setCurrent(Math.max(0, Math.min(stages.length - 1, focusStage)));
+    if (preferVerifierView) setVerifierView(true);
+  }, [focusStage, preferVerifierView, trace?.proof.circuitDigest]);
 
   useEffect(() => {
     if (!autoplay || trace === undefined) return;
