@@ -2,8 +2,8 @@
  * Zero-knowledge mode: blinding insertion (add Z_H·r to committed polys,
  * deg r = QUERIES+1) and the transcript simulator for the ZK tab.
  * M8. Gate Z13.
- * Wording is load-bearing: the simulator is an "illustration of the ZK
- * definition, not a formal proof" — keep that label.
+ * Wording is load-bearing — keep this exact label on the simulator surface:
+ * illustration of the ZK definition, not a formal proof
  */
 import type { Fp } from './field';
 import { polyAdd, polyMul, vanishing } from './poly';
@@ -13,6 +13,10 @@ import type { Fp2 } from './fp2';
 import { fp2 } from './fp2';
 import { fp2PolyAdd, fp2PolyMul, type Fp2Poly, embedPoly } from './fp2-poly';
 import { createTranscript } from './transcript';
+
+/** Load-bearing honesty label shared with the ZK panel and Z21. */
+export const ZK_TRANSCRIPT_ILLUSTRATION_LABEL =
+  'illustration of the ZK definition, not a formal proof';
 
 export function blind(p: Poly, n: number, params: Params, rand: () => Fp): Poly {
   if (!params.zk) return p.slice();

@@ -50,7 +50,7 @@ Next.js (static export) · React 19 · TypeScript (strict) · React Flow (circui
 
 ## Status & plan
 
-The local build is code-complete against the three-phase plan. Phase 2's extension-field protocol, Plookup/range/9×9 bundle, Poseidon, grinding deterrent, course mode, and proof-size/performance work are implemented; Phase 3's language, compiler, editor, scriptable gallery, provenance migration, sharing, and course polish are implemented. Remaining work is owner-only (audit, usability, browser perf, deploy/publish).
+The local build is code-complete against the three-phase plan. Phase 2's extension-field protocol, Plookup/range/9×9 bundle, Poseidon, grinding deterrent, course mode, and proof-size/performance work are implemented; Phase 3's language, compiler, editor, scriptable gallery, provenance migration, sharing, and course polish are implemented. Remaining work is owner-only (independent crypto audit, independent Plookup/multiset review, cold-visitor usability, low-end browser timing, deploy/publish and primary CI host).
 
 ## License
 
@@ -65,4 +65,4 @@ This IST timestamp rule is permanent for all future workflows, commits, and AI a
 Follow this format for version control:
 
 * **Base Format Version:** 0.0.0 — the version of the version-block schema itself (the shape of these lines).
-* **Product Version:** `v0.4.1_2026-03-04_22:10:08` (IST)
+* **Product Version:** `v0.4.2_2026-03-04_22:52:35` (IST)

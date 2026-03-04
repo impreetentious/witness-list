@@ -1,8 +1,10 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import { FieldElement } from '@/app/field-element';
+import { formatFpDecimal, formatFpHex } from '@/app/format-field';
 import { evalAt } from '@/zk/poly';
-import { blind, seededFieldSource, simulateTranscript } from '@/zk/zkmode';
+import { blind, seededFieldSource, simulateTranscript, ZK_TRANSCRIPT_ILLUSTRATION_LABEL } from '@/zk/zkmode';
 import type { TranscriptEntry } from '@/zk/types';
 import type { ProofTrace } from '@/zk/types';
 
@@ -48,13 +50,13 @@ export function ZkPanel({ trace, onRunZk }: { trace?: ProofTrace; onRunZk?: () =
         a matching FRI degree bound; the verifier checks that full path locally.
       </p>
       <p className="caveat">
-        The sampled no-witness transcript below remains an <strong>illustration of the ZK definition, not a formal proof</strong>.
+        The sampled no-witness transcript below remains an <strong>{ZK_TRANSCRIPT_ILLUSTRATION_LABEL}</strong>.
         It is deliberately separate from the verifier-valid blinded proof, so the UI never overclaims a simulator proof.
       </p>
       <dl className="zk-ledger">
-        <div><dt>Original P(7)</dt><dd>{evalAt(polynomial, 7n).toString()}</dd></div>
-        <div><dt>Blinded run A P′(7)</dt><dd>{evalAt(first, 7n).toString()}</dd></div>
-        <div><dt>Blinded run B P′(7)</dt><dd>{evalAt(second, 7n).toString()}</dd></div>
+        <div><dt>Original P(7)</dt><dd><FieldElement value={evalAt(polynomial, 7n)} /></dd></div>
+        <div><dt>Blinded run A P′(7)</dt><dd><FieldElement value={evalAt(first, 7n)} /></dd></div>
+        <div><dt>Blinded run B P′(7)</dt><dd><FieldElement value={evalAt(second, 7n)} /></dd></div>
         <div><dt>Trace values P(ωⁱ)</dt><dd>unchanged, because Z<sub>H</sub>(ωⁱ) = 0</dd></div>
       </dl>
       <div className="zk-histogram-demo">
@@ -76,7 +78,8 @@ export function ZkPanel({ trace, onRunZk }: { trace?: ProofTrace; onRunZk?: () =
         <ul className="transcript-ledger">
           {entries.map((entry, index) => (
             <li key={`${entry.kind}-${entry.label}-${index}`}>
-              <code>{entry.kind}</code> {entry.label}{entry.value === undefined ? '' : ` → ${entry.value}`}
+              <code>{entry.kind}</code> {entry.label}
+              {entry.value === undefined ? '' : <> → <span className="field-element" title={formatFpHex(entry.value)}>{formatFpDecimal(entry.value)}</span></>}
             </li>
           ))}
         </ul>
