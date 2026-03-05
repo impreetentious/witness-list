@@ -71,9 +71,16 @@ function nextPowerOfTwo(value: number): number {
   return n;
 }
 
-function buildRows(circuit: Circuit): { rows: CompiledRow[]; selectors: { qL: Fp[]; qR: Fp[]; qO: Fp[]; qM: Fp[]; qC: Fp[]; qLookup: Fp[]; lookupTags: Fp[] } } {
+function buildRows(circuit: Circuit): {
+  rows: CompiledRow[];
+  selectors: { qL: Fp[]; qR: Fp[]; qO: Fp[]; qM: Fp[]; qC: Fp[]; qLookup: Fp[]; lookupTags: Fp[] };
+} {
   assertValid(circuit);
-  const rows: CompiledRow[] = circuit.publicOrder.map((gateId) => ({ a: gateId, b: null, c: null }));
+  const rows: CompiledRow[] = circuit.publicOrder.map((gateId) => ({
+    a: gateId,
+    b: null,
+    c: null,
+  }));
   const qL: Fp[] = circuit.publicOrder.map(() => 1n);
   const qR: Fp[] = circuit.publicOrder.map(() => 0n);
   const qO: Fp[] = circuit.publicOrder.map(() => 0n);
@@ -89,23 +96,53 @@ function buildRows(circuit: Circuit): { rows: CompiledRow[]; selectors: { qL: Fp
         break;
       case 'const':
         rows.push({ a: null, b: null, c: gate.id });
-        qL.push(0n); qR.push(0n); qO.push(P - 1n); qM.push(0n); qC.push(mod(gate.value!)); qLookup.push(0n); lookupTags.push(0n);
+        qL.push(0n);
+        qR.push(0n);
+        qO.push(P - 1n);
+        qM.push(0n);
+        qC.push(mod(gate.value!));
+        qLookup.push(0n);
+        lookupTags.push(0n);
         break;
       case 'add':
         rows.push({ a: gate.inputs[0]!, b: gate.inputs[1]!, c: gate.id });
-        qL.push(1n); qR.push(1n); qO.push(P - 1n); qM.push(0n); qC.push(0n); qLookup.push(0n); lookupTags.push(0n);
+        qL.push(1n);
+        qR.push(1n);
+        qO.push(P - 1n);
+        qM.push(0n);
+        qC.push(0n);
+        qLookup.push(0n);
+        lookupTags.push(0n);
         break;
       case 'mul':
         rows.push({ a: gate.inputs[0]!, b: gate.inputs[1]!, c: gate.id });
-        qL.push(0n); qR.push(0n); qO.push(P - 1n); qM.push(1n); qC.push(0n); qLookup.push(0n); lookupTags.push(0n);
+        qL.push(0n);
+        qR.push(0n);
+        qO.push(P - 1n);
+        qM.push(1n);
+        qC.push(0n);
+        qLookup.push(0n);
+        lookupTags.push(0n);
         break;
       case 'assert0':
         rows.push({ a: gate.inputs[0]!, b: null, c: null });
-        qL.push(1n); qR.push(0n); qO.push(0n); qM.push(0n); qC.push(0n); qLookup.push(0n); lookupTags.push(0n);
+        qL.push(1n);
+        qR.push(0n);
+        qO.push(0n);
+        qM.push(0n);
+        qC.push(0n);
+        qLookup.push(0n);
+        lookupTags.push(0n);
         break;
       case 'lookup':
         rows.push({ a: gate.inputs[0]!, b: null, c: null });
-        qL.push(0n); qR.push(0n); qO.push(0n); qM.push(0n); qC.push(0n); qLookup.push(1n); lookupTags.push(mod(gate.value ?? 0n));
+        qL.push(0n);
+        qR.push(0n);
+        qO.push(0n);
+        qM.push(0n);
+        qC.push(0n);
+        qLookup.push(1n);
+        lookupTags.push(mod(gate.value ?? 0n));
         break;
     }
   }
@@ -113,17 +150,37 @@ function buildRows(circuit: Circuit): { rows: CompiledRow[]; selectors: { qL: Fp
   const n = nextPowerOfTwo(Math.max(rows.length, circuit.lookupTable?.length ?? 0));
   while (rows.length < n) {
     rows.push({ a: null, b: null, c: null });
-    qL.push(0n); qR.push(0n); qO.push(0n); qM.push(0n); qC.push(0n); qLookup.push(0n); lookupTags.push(0n);
+    qL.push(0n);
+    qR.push(0n);
+    qO.push(0n);
+    qM.push(0n);
+    qC.push(0n);
+    qLookup.push(0n);
+    lookupTags.push(0n);
   }
   return { rows, selectors: { qL, qR, qO, qM, qC, qLookup, lookupTags } };
 }
 
-function compiledLookupTable(circuit: Circuit, n: number): { lookupTable: Fp[]; lookupTableTags: Fp[]; lookupDummy: Fp; lookupDummyTag: Fp; lookupMode: 'membership' | 'multiset' } {
-  const pairs = (circuit.lookupTable ?? [0n]).map((value, index) => ({ value: mod(value), tag: mod(circuit.lookupTableTags?.[index] ?? 0n) }));
-  if (circuit.lookupMode !== 'multiset') pairs.sort((left, right) => left.value < right.value ? -1 : left.value > right.value ? 1 : 0);
+function compiledLookupTable(
+  circuit: Circuit,
+  n: number,
+): {
+  lookupTable: Fp[];
+  lookupTableTags: Fp[];
+  lookupDummy: Fp;
+  lookupDummyTag: Fp;
+  lookupMode: 'membership' | 'multiset';
+} {
+  const pairs = (circuit.lookupTable ?? [0n]).map((value, index) => ({
+    value: mod(value),
+    tag: mod(circuit.lookupTableTags?.[index] ?? 0n),
+  }));
+  if (circuit.lookupMode !== 'multiset')
+    pairs.sort((left, right) => (left.value < right.value ? -1 : left.value > right.value ? 1 : 0));
   const table = pairs.map((pair) => pair.value);
   const tags = pairs.map((pair) => pair.tag);
-  if (table.length > n) throw new Error(`lookup table has ${table.length} entries but circuit domain has ${n} rows`);
+  if (table.length > n)
+    throw new Error(`lookup table has ${table.length} entries but circuit domain has ${n} rows`);
   const multiset = circuit.lookupMode === 'multiset';
   const dummy = multiset ? table.at(-1)! : table[0]!;
   const dummyTag = multiset ? tags.at(-1)! : tags[0]!;
@@ -165,23 +222,32 @@ function canonicalBytes(circuit: Circuit, compiled: Omit<CompiledCircuit, 'diges
     ...(circuit.provenance === undefined ? {} : { provenance: circuit.provenance }),
     ...(circuit.lookupTable === undefined ? {} : { lookupTable: circuit.lookupTable.map(String) }),
     ...(circuit.lookupMode === undefined ? {} : { lookupMode: circuit.lookupMode }),
-    ...(circuit.lookupTableTags === undefined ? {} : { lookupTableTags: circuit.lookupTableTags.map(String) }),
+    ...(circuit.lookupTableTags === undefined
+      ? {}
+      : { lookupTableTags: circuit.lookupTableTags.map(String) }),
     gates: [...circuit.gates]
       .sort((a, b) => a.id - b.id)
-      .map((gate) => ({ id: gate.id, op: gate.op, inputs: gate.inputs, value: gate.value?.toString() })),
+      .map((gate) => ({
+        id: gate.id,
+        op: gate.op,
+        inputs: gate.inputs,
+        value: gate.value?.toString(),
+      })),
     publicOrder: circuit.publicOrder,
     qL: compiled.qL.map(String),
     qR: compiled.qR.map(String),
     qO: compiled.qO.map(String),
     qM: compiled.qM.map(String),
     qC: compiled.qC.map(String),
-    ...(circuit.lookupTable === undefined ? {} : {
-      qLookup: compiled.qLookup.map(String),
-      lookupTags: compiled.lookupTags.map(String),
-      compiledLookupTable: compiled.lookupTable.map(String),
-      lookupTableTags: compiled.lookupTableTags.map(String),
-      lookupMode: compiled.lookupMode,
-    }),
+    ...(circuit.lookupTable === undefined
+      ? {}
+      : {
+          qLookup: compiled.qLookup.map(String),
+          lookupTags: compiled.lookupTags.map(String),
+          compiledLookupTable: compiled.lookupTable.map(String),
+          lookupTableTags: compiled.lookupTableTags.map(String),
+          lookupMode: compiled.lookupMode,
+        }),
     sigma: Array.from(compiled.sigma),
   };
   return new TextEncoder().encode(JSON.stringify(canonical));
@@ -204,7 +270,10 @@ export async function compile(circuit: Circuit): Promise<CompiledCircuit> {
     publicRows: circuit.publicOrder.length,
     rows,
   };
-  return { ...compiledWithoutDigest, digest: await sha256(canonicalBytes(circuit, compiledWithoutDigest)) };
+  return {
+    ...compiledWithoutDigest,
+    digest: await sha256(canonicalBytes(circuit, compiledWithoutDigest)),
+  };
 }
 
 /**
@@ -255,7 +324,7 @@ export function generateWitness(
     values.set(wireId, mod(value));
   }
 
-  const valueAt = (wireId: number | null): Fp => wireId === null ? 0n : values.get(wireId)!;
+  const valueAt = (wireId: number | null): Fp => (wireId === null ? 0n : values.get(wireId)!);
   return {
     a: rows.map((row) => valueAt(row.a)),
     b: rows.map((row) => valueAt(row.b)),

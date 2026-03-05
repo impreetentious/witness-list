@@ -62,18 +62,23 @@ function buildSudoku(): Circuit {
   const groups = [
     ...sudokuCellWires,
     ...Array.from({ length: 4 }, (_, column) => sudokuCellWires.map((row) => row[column]!)),
-    ...[0, 2].flatMap((rowStart) => [0, 2].map((columnStart) => [
-      sudokuCellWires[rowStart]![columnStart]!,
-      sudokuCellWires[rowStart]![columnStart + 1]!,
-      sudokuCellWires[rowStart + 1]![columnStart]!,
-      sudokuCellWires[rowStart + 1]![columnStart + 1]!,
-    ])),
+    ...[0, 2].flatMap((rowStart) =>
+      [0, 2].map((columnStart) => [
+        sudokuCellWires[rowStart]![columnStart]!,
+        sudokuCellWires[rowStart]![columnStart + 1]!,
+        sudokuCellWires[rowStart + 1]![columnStart]!,
+        sudokuCellWires[rowStart + 1]![columnStart + 1]!,
+      ]),
+    ),
   ];
 
   for (const group of groups) {
     const sum = builder.add(builder.add(group[0]!, group[1]!), builder.add(group[2]!, group[3]!));
     builder.assertZero(builder.add(sum, minusTen));
-    const product = builder.mul(builder.mul(group[0]!, group[1]!), builder.mul(group[2]!, group[3]!));
+    const product = builder.mul(
+      builder.mul(group[0]!, group[1]!),
+      builder.mul(group[2]!, group[3]!),
+    );
     builder.assertZero(builder.add(product, minusTwentyFour));
   }
 
@@ -88,7 +93,9 @@ function buildSudoku(): Circuit {
 export const sudoku: Circuit = buildSudoku();
 
 /** Structured input panel mapping: private solution cells plus public givens. */
-export function sudokuInputs(solution: readonly (readonly Fp[])[] = sudokuSolution): Map<number, Fp> {
+export function sudokuInputs(
+  solution: readonly (readonly Fp[])[] = sudokuSolution,
+): Map<number, Fp> {
   if (solution.length !== 4 || solution.some((row) => row.length !== 4)) {
     throw new Error('Sudoku input must be a 4×4 grid');
   }
@@ -98,6 +105,7 @@ export function sudokuInputs(solution: readonly (readonly Fp[])[] = sudokuSoluti
       inputs.set(sudokuCellWires[row]![column]!, solution[row]![column]!);
     }
   }
-  for (const given of sudokuGivens) inputs.set(given.publicWire, solution[given.row]![given.column]!);
+  for (const given of sudokuGivens)
+    inputs.set(given.publicWire, solution[given.row]![given.column]!);
   return inputs;
 }

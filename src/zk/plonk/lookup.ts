@@ -25,16 +25,27 @@ export function hasLookups(circuit: CompiledCircuit): boolean {
   return circuit.qLookup.some((value) => value === 1n);
 }
 
-export function buildLookupWitness(circuit: CompiledCircuit, witness: Witness): LookupWitness | undefined {
+export function buildLookupWitness(
+  circuit: CompiledCircuit,
+  witness: Witness,
+): LookupWitness | undefined {
   if (!hasLookups(circuit)) return undefined;
-  const f = circuit.qLookup.map((selector, row) => selector === 1n ? witness.a[row]! : circuit.lookupDummy);
-  const fTags = circuit.qLookup.map((selector, row) => selector === 1n ? circuit.lookupTags[row]! : circuit.lookupDummyTag);
+  const f = circuit.qLookup.map((selector, row) =>
+    selector === 1n ? witness.a[row]! : circuit.lookupDummy,
+  );
+  const fTags = circuit.qLookup.map((selector, row) =>
+    selector === 1n ? circuit.lookupTags[row]! : circuit.lookupDummyTag,
+  );
   const table = circuit.lookupTable.slice();
   const tableTags = circuit.lookupTableTags.slice();
   if (circuit.lookupMode === 'multiset') return { mode: 'multiset', f, fTags, table, tableTags };
-  const sorted = [...f, ...table].sort((left, right) => left < right ? -1 : left > right ? 1 : 0);
+  const sorted = [...f, ...table].sort((left, right) => (left < right ? -1 : left > right ? 1 : 0));
   return {
-    mode: 'membership', f, fTags, table, tableTags,
+    mode: 'membership',
+    f,
+    fTags,
+    table,
+    tableTags,
     h1: Array.from({ length: circuit.n }, (_, index) => sorted[index * 2]!),
     h2: Array.from({ length: circuit.n }, (_, index) => sorted[index * 2 + 1]!),
   };
@@ -48,7 +59,11 @@ function productFactor(gamma: Fp2, beta: Fp2, current: Fp, next: Fp): Fp2 {
  * Z(ωx)/Z(x) = (1+β)(γ+f)(γ(1+β)+t+βt') /
  *              ((γ(1+β)+h1+βh2)(γ(1+β)+h2+βh1')).
  */
-export function buildLookupGrandProduct(witness: LookupWitness, beta: Fp2, gamma: Fp2): LookupGrandProduct {
+export function buildLookupGrandProduct(
+  witness: LookupWitness,
+  beta: Fp2,
+  gamma: Fp2,
+): LookupGrandProduct {
   const n = witness.f.length;
   const numerators = Array.from({ length: n }, () => fp2One);
   const denominators = Array.from({ length: n }, () => fp2One);
@@ -74,7 +89,8 @@ export function buildLookupGrandProduct(witness: LookupWitness, beta: Fp2, gamma
   const partials = Array.from({ length: n }, () => fp2One);
   let running = fp2One;
   for (let row = 0; row < n; row++) {
-    if (isZero(denominators[row]!)) throw new Error(`lookup grand-product denominator is zero at row ${row}`);
+    if (isZero(denominators[row]!))
+      throw new Error(`lookup grand-product denominator is zero at row ${row}`);
     running = mul(running, mul(numerators[row]!, inv(denominators[row]!)));
     partials[row] = running;
     if (row + 1 < n) z[row + 1] = running;

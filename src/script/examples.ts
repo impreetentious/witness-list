@@ -16,14 +16,20 @@ const sudoku4Solution = [
 
 const sudoku4Cell = (row: number, column: number): string => `c${row}${column}`;
 const sudoku4Groups = [
-  ...Array.from({ length: 4 }, (_, row) => Array.from({ length: 4 }, (_, column) => sudoku4Cell(row, column))),
-  ...Array.from({ length: 4 }, (_, column) => Array.from({ length: 4 }, (_, row) => sudoku4Cell(row, column))),
-  ...[0, 2].flatMap((rowStart) => [0, 2].map((columnStart) => [
-    sudoku4Cell(rowStart, columnStart),
-    sudoku4Cell(rowStart, columnStart + 1),
-    sudoku4Cell(rowStart + 1, columnStart),
-    sudoku4Cell(rowStart + 1, columnStart + 1),
-  ])),
+  ...Array.from({ length: 4 }, (_, row) =>
+    Array.from({ length: 4 }, (_, column) => sudoku4Cell(row, column)),
+  ),
+  ...Array.from({ length: 4 }, (_, column) =>
+    Array.from({ length: 4 }, (_, row) => sudoku4Cell(row, column)),
+  ),
+  ...[0, 2].flatMap((rowStart) =>
+    [0, 2].map((columnStart) => [
+      sudoku4Cell(rowStart, columnStart),
+      sudoku4Cell(rowStart, columnStart + 1),
+      sudoku4Cell(rowStart + 1, columnStart),
+      sudoku4Cell(rowStart + 1, columnStart + 1),
+    ]),
+  ),
 ];
 const sudoku4Givens = [
   { name: 'given00', row: 0, column: 0 },
@@ -34,17 +40,25 @@ const sudoku4Givens = [
 const sudoku4Source = [
   'claim Sudoku4Script {',
   ...sudoku4Givens.map(({ name }) => `  public ${name}: field;`),
-  ...sudoku4Solution.flatMap((row, rowIndex) => row.map((_, columnIndex) => `  private ${sudoku4Cell(rowIndex, columnIndex)}: field;`)),
-  ...sudoku4Solution.flatMap((row, rowIndex) => row.map((_, columnIndex) => `  range ${sudoku4Cell(rowIndex, columnIndex)} in 1..4;`)),
+  ...sudoku4Solution.flatMap((row, rowIndex) =>
+    row.map((_, columnIndex) => `  private ${sudoku4Cell(rowIndex, columnIndex)}: field;`),
+  ),
+  ...sudoku4Solution.flatMap((row, rowIndex) =>
+    row.map((_, columnIndex) => `  range ${sudoku4Cell(rowIndex, columnIndex)} in 1..4;`),
+  ),
   ...sudoku4Groups.flatMap((group) => [
     `  assert ${group.join(' + ')} == 10;`,
     `  assert ${group.join(' * ')} == 24;`,
   ]),
-  ...sudoku4Givens.map(({ name, row, column }) => `  assert ${sudoku4Cell(row, column)} == ${name};`),
+  ...sudoku4Givens.map(
+    ({ name, row, column }) => `  assert ${sudoku4Cell(row, column)} == ${name};`,
+  ),
   '}',
 ].join('\n');
 const sudoku4Inputs: Record<string, bigint> = Object.fromEntries([
-  ...sudoku4Solution.flatMap((row, rowIndex) => row.map((value, columnIndex) => [sudoku4Cell(rowIndex, columnIndex), value] as const)),
+  ...sudoku4Solution.flatMap((row, rowIndex) =>
+    row.map((value, columnIndex) => [sudoku4Cell(rowIndex, columnIndex), value] as const),
+  ),
   ...sudoku4Givens.map(({ name, row, column }) => [name, sudoku4Solution[row][column]] as const),
 ]);
 

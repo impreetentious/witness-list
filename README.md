@@ -2,7 +2,7 @@
 
 **Build a claim, prove it, try to cheat.**
 
-In a trial, the *witness list* is the roster of testimony the parties will offer. In a zero-knowledge proof, the *witness* is the private input — the thing you know but won't reveal. Witness List is the workshop for both meanings: build a claim, put it on the stand, cross-examine it.
+In a trial, the _witness list_ is the roster of testimony the parties will offer. In a zero-knowledge proof, the _witness_ is the private input — the thing you know but won't reveal. Witness List is the workshop for both meanings: build a claim, put it on the stand, cross-examine it.
 
 A zero-knowledge proof workshop that runs entirely in your browser. Write a bounded Witness Script or choose a visual preset, compile it to PLONK constraints, and run a teaching-scale Fp² DEEP/FRI proof through all seven verifier checks. The app includes protocol-bound Plookup ranges, a tagged-multiset 9×9 Sudoku, blinded proofs, optional transcript-bound grinding work, a circuit workbench, a worker-backed 16-stage replay player, ten guided lessons, an attack lab, and verify-only proof URLs that preserve canonical script provenance.
 
@@ -15,7 +15,7 @@ ZK today is either hand-wavy cave metaphors or production libraries with opaque 
 - **Prove** — five preset claims with structured inputs (4×4 and multiset-backed 9×9 Sudoku grids, a hash preimage, a lookup-ranged age slider, and a Pythagorean triple), or wire up your own circuit from the gate palette.
 - **Step through** — a 16-stage player from circuit to verifier checklist. The grand-product copy-constraint argument telescopes to 1 before your eyes. FRI folds halve the degree card by card.
 - **Cheat** — a first-class attack lab: tamper the witness (caught by the quotient identity), edit a committed leaf (caught by a Merkle path), or grind challenges against a weakened verifier (caught by statistics — with a live attempt counter showing you what "security bits" buys).
-- **See the zero** — a ZK tab with a ledger of every byte the verifier receives, and a side-by-side simulated transcript generated *without* the witness.
+- **See the zero** — a ZK tab with a ledger of every byte the verifier receives, and a side-by-side simulated transcript generated _without_ the witness.
 - **Share proofs** — the URL carries circuit, public inputs, and proof; the recipient's browser verifies locally. No accounts, no server.
 - **Author claims** — CodeMirror-backed Witness Script provides syntax highlighting, compile-on-idle diagnostics, canonical formatting, bounded loops/ranges, and MiMC/Poseidon/Merkle standard-library calls.
 - **Learn the arc** — ten locally persisted lessons, a proof-size breakdown, a 200-replay blinding histogram, and an optional Poseidon Merkle tree make the later protocol ideas inspectable too.
@@ -70,4 +70,4 @@ MIT — see [LICENSE](./LICENSE).
 
 ---
 
-**Version:** v0.5.0
+**Version:** v0.6.0

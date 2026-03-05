@@ -5,7 +5,15 @@
  * tools/reference.py. This module is intentionally DOM-free so the extension
  * arithmetic can be exercised under Vitest's node environment.
  */
-import { P, add as addBase, inv as invBase, mul as mulBase, neg as negBase, pow as powBase, sub as subBase } from './field';
+import {
+  P,
+  add as addBase,
+  inv as invBase,
+  mul as mulBase,
+  neg as negBase,
+  pow as powBase,
+  sub as subBase,
+} from './field';
 import type { Fp } from './field';
 
 export interface Fp2 {
@@ -60,7 +68,10 @@ export function square(value: Fp2): Fp2 {
 
 /** (a + bu)⁻¹ = (a - bu) / (a² - 7b²). */
 export function inv(value: Fp2): Fp2 {
-  const norm = subBase(mulBase(value.c0, value.c0), mulBase(FP2_NON_RESIDUE, mulBase(value.c1, value.c1)));
+  const norm = subBase(
+    mulBase(value.c0, value.c0),
+    mulBase(FP2_NON_RESIDUE, mulBase(value.c1, value.c1)),
+  );
   if (norm === 0n) throw new Error('fp2.inv(0)');
   const normInverse = invBase(norm);
   return { c0: mulBase(value.c0, normInverse), c1: mulBase(negBase(value.c1), normInverse) };

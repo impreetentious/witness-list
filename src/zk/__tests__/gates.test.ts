@@ -6,18 +6,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import fc from 'fast-check';
-import {
-  P,
-  add,
-  batchInverse,
-  inv,
-  mod,
-  mul,
-  neg,
-  pow,
-  sub,
-  twoAdicRoot,
-} from '../field';
+import { P, add, batchInverse, inv, mod, mul, neg, pow, sub, twoAdicRoot } from '../field';
 import type { Fp } from '../field';
 import { cosetLDE, interpolate, intt, ntt } from '../ntt';
 import { evalAt, lagrangeAt, polyAdd, polyDivRem, polyMul, vanishing } from '../poly';
@@ -29,7 +18,12 @@ import { pythagorean } from '../circuit/presets/pythagorean';
 import { age, ageInputs, agePreset } from '../circuit/presets/age';
 import { mimcHash, makeMimcPreset } from '../circuit/presets/mimc';
 import { sudoku, sudokuCellWires, sudokuGivens, sudokuInputs } from '../circuit/presets/sudoku';
-import { sudoku9, sudoku9CellWires, sudoku9Givens, sudoku9Inputs } from '../circuit/presets/sudoku9';
+import {
+  sudoku9,
+  sudoku9CellWires,
+  sudoku9Givens,
+  sudoku9Inputs,
+} from '../circuit/presets/sudoku9';
 import { buildGrandProduct } from '../plonk/permutation';
 import { buildQuotient, composeConstraints } from '../plonk/quotient';
 import { foldLayer } from '../fri/fri';
@@ -51,7 +45,12 @@ import {
 } from '../fp2';
 import { POSEIDON_MDS, poseidonHash, poseidonMds } from '../poseidon';
 import { buildPoseidonTree, verifyPoseidonPath } from '../poseidon-merkle';
-import { compileWitnessScript, parseWitnessScript, printWitnessScript, WitnessScriptError } from '../../script/witness-script';
+import {
+  compileWitnessScript,
+  parseWitnessScript,
+  printWitnessScript,
+  WitnessScriptError,
+} from '../../script/witness-script';
 import { witnessScriptExamples } from '../../script/examples';
 import { findGrindingNonce, leadingZeroBits, verifyGrindingNonce } from '../grinding';
 
@@ -133,7 +132,10 @@ describe('M1 gates — poly & NTT', () => {
       const values = Array.from({ length: n }, (_, i) => BigInt(i * i + 3 * i + 1));
       const omega = twoAdicRoot(Math.log2(n));
       const expected = values.map((_, row) =>
-        values.reduce((sum, value, column) => add(sum, mul(value, pow(omega, BigInt(row * column)))), 0n),
+        values.reduce(
+          (sum, value, column) => add(sum, mul(value, pow(omega, BigInt(row * column)))),
+          0n,
+        ),
       );
       expect(ntt(values)).toEqual(expected);
     }
@@ -233,7 +235,11 @@ describe('M3 gates — arithmetization', () => {
     expect(compiled.digest).toHaveLength(32);
     expect(new Set(compiled.sigma)).toHaveLength(3 * compiled.n);
 
-    const inputs = new Map([[1, 5n], [2, 3n], [3, 4n]]);
+    const inputs = new Map([
+      [1, 5n],
+      [2, 3n],
+      [3, 4n],
+    ]);
     const honest = generateWitness(pythagorean, inputs);
     expect(honest.c[1]).toBe(9n);
     expect(honest.c[7]).toBe(0n); // final a² + b² − c² row
@@ -265,10 +271,18 @@ describe('M3 gates — arithmetization', () => {
     sigma[n + 1] = 0;
     const compiled = {
       n,
-      qL: Array<Fp>(n).fill(0n), qR: Array<Fp>(n).fill(0n), qO: Array<Fp>(n).fill(0n),
-      qM: Array<Fp>(n).fill(0n), qC: Array<Fp>(n).fill(0n),
-      qLookup: Array<Fp>(n).fill(0n), lookupTags: Array<Fp>(n).fill(0n), lookupTable: Array<Fp>(n).fill(0n),
-      lookupTableTags: Array<Fp>(n).fill(0n), lookupMode: 'membership' as const, lookupDummy: 0n, lookupDummyTag: 0n,
+      qL: Array<Fp>(n).fill(0n),
+      qR: Array<Fp>(n).fill(0n),
+      qO: Array<Fp>(n).fill(0n),
+      qM: Array<Fp>(n).fill(0n),
+      qC: Array<Fp>(n).fill(0n),
+      qLookup: Array<Fp>(n).fill(0n),
+      lookupTags: Array<Fp>(n).fill(0n),
+      lookupTable: Array<Fp>(n).fill(0n),
+      lookupTableTags: Array<Fp>(n).fill(0n),
+      lookupMode: 'membership' as const,
+      lookupDummy: 0n,
+      lookupDummyTag: 0n,
       sigma,
       publicRows: 0,
       digest: new Uint8Array(32),
@@ -337,7 +351,11 @@ describe('M4/M5 gates — protocol', () => {
     // The same invariant must arise from a real compiled circuit and the actual
     // non-propagating witness tamper hook — not just a constructed polynomial.
     return compile(pythagorean).then((compiled) => {
-      const inputs = new Map([[1, 5n], [2, 3n], [3, 4n]]);
+      const inputs = new Map([
+        [1, 5n],
+        [2, 3n],
+        [3, 4n],
+      ]);
       const honestComposition = composeConstraints(
         compiled,
         generateWitness(pythagorean, inputs),
@@ -363,26 +381,23 @@ describe('M4/M5 gates — protocol', () => {
   });
   it('Z7: FRI fold-of-evaluations equals evaluation-of-folded-polynomial', () => {
     fc.assert(
-      fc.property(
-        fc.array(fpArb, { minLength: 8, maxLength: 8 }),
-        fpArb,
-        (coefficients, beta) => {
-          const layer = cosetLDE(coefficients, 2);
-          const folded = foldLayer(layer, beta, 7n);
-          const foldedCoefficients = Array.from(
-            { length: Math.ceil(coefficients.length / 2) },
-            (_, index) => add(coefficients[2 * index] ?? 0n, mul(beta, coefficients[2 * index + 1] ?? 0n)),
-          );
-          const outputRoot = twoAdicRoot(3);
-          let outputPoint = mul(7n, 7n); // the folded domain is (7·H)² = 7²·H²
-          const expected = Array.from({ length: folded.length }, () => {
-            const value = evalAt(foldedCoefficients, outputPoint);
-            outputPoint = mul(outputPoint, outputRoot);
-            return value;
-          });
-          expect(folded).toEqual(expected);
-        },
-      ),
+      fc.property(fc.array(fpArb, { minLength: 8, maxLength: 8 }), fpArb, (coefficients, beta) => {
+        const layer = cosetLDE(coefficients, 2);
+        const folded = foldLayer(layer, beta, 7n);
+        const foldedCoefficients = Array.from(
+          { length: Math.ceil(coefficients.length / 2) },
+          (_, index) =>
+            add(coefficients[2 * index] ?? 0n, mul(beta, coefficients[2 * index + 1] ?? 0n)),
+        );
+        const outputRoot = twoAdicRoot(3);
+        let outputPoint = mul(7n, 7n); // the folded domain is (7·H)² = 7²·H²
+        const expected = Array.from({ length: folded.length }, () => {
+          const value = evalAt(foldedCoefficients, outputPoint);
+          outputPoint = mul(outputPoint, outputRoot);
+          return value;
+        });
+        expect(folded).toEqual(expected);
+      }),
       { numRuns: 100 },
     );
   });
@@ -391,7 +406,14 @@ describe('M4/M5 gates — protocol', () => {
     const compiled = await compile(pythagorean);
     const trace = await proveM4(
       compiled,
-      generateWitness(pythagorean, new Map([[1, 5n], [2, 3n], [3, 4n]])),
+      generateWitness(
+        pythagorean,
+        new Map([
+          [1, 5n],
+          [2, 3n],
+          [3, 4n],
+        ]),
+      ),
       [5n],
       { n: compiled.n, blowup: 8, queries: 32, zk: false },
       42,
@@ -410,13 +432,22 @@ describe('M4/M5 gates — protocol', () => {
         opening.label === 'a' ? { ...opening, value: add(opening.value, 1n) } : opening,
       ),
     };
-    expect((await verifyM4(compiled, tamperedProof)).checks.find((check) => check.id === 'V2')?.ok).toBe(false);
+    expect(
+      (await verifyM4(compiled, tamperedProof)).checks.find((check) => check.id === 'V2')?.ok,
+    ).toBe(false);
   });
   it('M5: a committed DEEP/FRI proof verifies V1–V7, while a changed leaf fails V3', async () => {
     const compiled = await compile(pythagorean);
     const trace = await prove(
       compiled,
-      generateWitness(pythagorean, new Map([[1, 5n], [2, 3n], [3, 4n]])),
+      generateWitness(
+        pythagorean,
+        new Map([
+          [1, 5n],
+          [2, 3n],
+          [3, 4n],
+        ]),
+      ),
       [5n],
       { n: compiled.n, blowup: 8, queries: 4, zk: false },
       42,
@@ -429,9 +460,20 @@ describe('M4/M5 gates — protocol', () => {
     const firstQuery = trace.proof.queries[0]!;
     const tampered = {
       ...trace.proof,
-      queries: trace.proof.queries.map((query, index) => index === 0
-        ? { ...query, leaves: { ...query.leaves, wires: [add(firstQuery.leaves.wires![0]!, 1n), ...firstQuery.leaves.wires!.slice(1)] } }
-        : query),
+      queries: trace.proof.queries.map((query, index) =>
+        index === 0
+          ? {
+              ...query,
+              leaves: {
+                ...query.leaves,
+                wires: [
+                  add(firstQuery.leaves.wires![0]!, 1n),
+                  ...firstQuery.leaves.wires!.slice(1),
+                ],
+              },
+            }
+          : query,
+      ),
     };
     const tamperedResult = await verify(compiled, tampered);
     expect(tamperedResult.ok).toBe(false);
@@ -441,8 +483,24 @@ describe('M4/M5 gates — protocol', () => {
     const mimc = await makeMimcPreset();
     const mimcPreimage = 123456789n;
     const mimcDigest = await mimcHash(mimcPreimage);
-    const cases: Array<{ circuit: typeof pythagorean; inputs: Map<number, Fp>; publicInputs: Fp[]; override: Map<number, Fp>; seeds: number }> = [
-      { circuit: pythagorean, inputs: new Map([[1, 5n], [2, 3n], [3, 4n]]), publicInputs: [5n], override: new Map([[4, 10n]]), seeds: 20 },
+    const cases: Array<{
+      circuit: typeof pythagorean;
+      inputs: Map<number, Fp>;
+      publicInputs: Fp[];
+      override: Map<number, Fp>;
+      seeds: number;
+    }> = [
+      {
+        circuit: pythagorean,
+        inputs: new Map([
+          [1, 5n],
+          [2, 3n],
+          [3, 4n],
+        ]),
+        publicInputs: [5n],
+        override: new Map([[4, 10n]]),
+        seeds: 20,
+      },
       {
         circuit: sudoku,
         inputs: sudokuInputs(),
@@ -452,12 +510,21 @@ describe('M4/M5 gates — protocol', () => {
       },
       {
         circuit: mimc.circuit,
-        inputs: new Map([[mimc.preimageWire, mimcPreimage], [mimc.digestWire, mimcDigest]]),
+        inputs: new Map([
+          [mimc.preimageWire, mimcPreimage],
+          [mimc.digestWire, mimcDigest],
+        ]),
         publicInputs: [mimcDigest],
         override: new Map([[mimc.preimageWire, mimcPreimage + 1n]]),
         seeds: 20,
       },
-      { circuit: age, inputs: ageInputs(), publicInputs: [], override: new Map([[agePreset.ageWire, 17n]]), seeds: 20 },
+      {
+        circuit: age,
+        inputs: ageInputs(),
+        publicInputs: [],
+        override: new Map([[agePreset.ageWire, 17n]]),
+        seeds: 20,
+      },
       // 9×9 is covered with fewer seeds here; denser honest/attack coverage lives under Z20.
       {
         circuit: sudoku9,
@@ -474,24 +541,61 @@ describe('M4/M5 gates — protocol', () => {
         const a1 = await tamperWitness(circuit, inputs, override, params, seed);
         const a1Result = await verify(compiled, a1.proof);
         expect(a1Result.ok, `${circuit.name}, A1, seed ${seed}`).toBe(false);
-        expect(a1Result.checks.find((check) => check.id === 'V2')?.ok, `${circuit.name}, A1, seed ${seed}`).toBe(false);
+        expect(
+          a1Result.checks.find((check) => check.id === 'V2')?.ok,
+          `${circuit.name}, A1, seed ${seed}`,
+        ).toBe(false);
 
-        const honest = await prove(compiled, generateWitness(circuit, inputs), publicInputs, params, seed);
-        const a2Result = await verify(compiled, tamperLeaf(honest, honest.proof.queries[0]!.index).proof);
+        const honest = await prove(
+          compiled,
+          generateWitness(circuit, inputs),
+          publicInputs,
+          params,
+          seed,
+        );
+        const a2Result = await verify(
+          compiled,
+          tamperLeaf(honest, honest.proof.queries[0]!.index).proof,
+        );
         expect(a2Result.ok, `${circuit.name}, A2, seed ${seed}`).toBe(false);
-        expect(a2Result.checks.find((check) => check.id === 'V3')?.ok, `${circuit.name}, A2, seed ${seed}`).toBe(false);
+        expect(
+          a2Result.checks.find((check) => check.id === 'V3')?.ok,
+          `${circuit.name}, A2, seed ${seed}`,
+        ).toBe(false);
       }
     }
   }, 120_000);
   it('Z8: every preset proves and verifies all seven checks across deterministic replays', async () => {
     const mimc = await makeMimcPreset();
     const mimcPreimage = 123456789n;
-    const cases: Array<{ circuit: typeof pythagorean; inputs: Map<number, Fp>; publicInputs: Fp[]; seeds: number }> = [
-      { circuit: pythagorean, inputs: new Map([[1, 5n], [2, 3n], [3, 4n]]), publicInputs: [5n], seeds: 20 },
-      { circuit: sudoku, inputs: sudokuInputs(), publicInputs: sudokuGivens.map((given) => given.value), seeds: 20 },
+    const cases: Array<{
+      circuit: typeof pythagorean;
+      inputs: Map<number, Fp>;
+      publicInputs: Fp[];
+      seeds: number;
+    }> = [
+      {
+        circuit: pythagorean,
+        inputs: new Map([
+          [1, 5n],
+          [2, 3n],
+          [3, 4n],
+        ]),
+        publicInputs: [5n],
+        seeds: 20,
+      },
+      {
+        circuit: sudoku,
+        inputs: sudokuInputs(),
+        publicInputs: sudokuGivens.map((given) => given.value),
+        seeds: 20,
+      },
       {
         circuit: mimc.circuit,
-        inputs: new Map([[mimc.preimageWire, mimcPreimage], [mimc.digestWire, await mimcHash(mimcPreimage)]]),
+        inputs: new Map([
+          [mimc.preimageWire, mimcPreimage],
+          [mimc.digestWire, await mimcHash(mimcPreimage)],
+        ]),
         publicInputs: [await mimcHash(mimcPreimage)],
         seeds: 20,
       },
@@ -515,14 +619,21 @@ describe('M4/M5 gates — protocol', () => {
         );
         const result = await verify(compiled, trace.proof);
         expect(result.ok, `${circuit.name}, seed ${seed}`).toBe(true);
-        expect(result.checks.every((check) => check.ok), `${circuit.name}, seed ${seed}`).toBe(true);
+        expect(
+          result.checks.every((check) => check.ok),
+          `${circuit.name}, seed ${seed}`,
+        ).toBe(true);
       }
     }
   }, 120_000);
   it('Z12 smoke: the shared A3 prover can grind a Q=1 forged proof through the real verifier', async () => {
     const result = await grindChallenge(
       pythagorean,
-      new Map([[1, 5n], [2, 3n], [3, 4n]]),
+      new Map([
+        [1, 5n],
+        [2, 3n],
+        [3, 4n],
+      ]),
       1,
       32,
     );
@@ -532,20 +643,32 @@ describe('M4/M5 gates — protocol', () => {
   });
   it('Z10: fixed proof input has a frozen share-wire fingerprint', async () => {
     const compiled = await compile(pythagorean);
-    const proof = (await proveV1ForCompatibility(
-      compiled,
-      generateWitness(pythagorean, new Map([[1, 5n], [2, 3n], [3, 4n]])),
-      [5n],
-      { n: compiled.n, blowup: 8, queries: 4, zk: false },
-      42,
-    )).proof;
+    const proof = (
+      await proveV1ForCompatibility(
+        compiled,
+        generateWitness(
+          pythagorean,
+          new Map([
+            [1, 5n],
+            [2, 3n],
+            [3, 4n],
+          ]),
+        ),
+        [5n],
+        { n: compiled.n, blowup: 8, queries: 4, zk: false },
+        42,
+      )
+    ).proof;
     const wire = await encodeShare({ circuit: pythagorean, publicInputs: [5n], proof }, false);
-    const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(wire)));
+    const digest = new Uint8Array(
+      await crypto.subtle.digest('SHA-256', new TextEncoder().encode(wire)),
+    );
     const fingerprint = Array.from(digest, (byte) => byte.toString(16).padStart(2, '0')).join('');
     expect(fingerprint).toBe('d3dcada69ffeeb2a314d658c7552594af45a059f9e5cad4ce45c21df4482b401');
   });
   it('Z12: selected-coset grinding has the expected mean work over 200 deterministic trials', () => {
-    const mean = (values: number[]): number => values.reduce((total, value) => total + value, 0) / values.length;
+    const mean = (values: number[]): number =>
+      values.reduce((total, value) => total + value, 0) / values.length;
     const q1 = mean(sampleGrindingAttempts(1, 200));
     const q2 = mean(sampleGrindingAttempts(2, 200));
     // The geometric means are 8 and 64. The full forged-proof path is covered
@@ -582,25 +705,53 @@ describe('Phase 2A gates — quadratic extension challenges', () => {
 
   it('propagates every protocol and FRI challenge through the v2 proof wire', async () => {
     const compiled = await compile(pythagorean);
-    const trace = await prove(compiled, generateWitness(pythagorean, new Map([[1, 5n], [2, 3n], [3, 4n]])), [5n], { n: compiled.n, blowup: 8, queries: 2, zk: false }, 31);
+    const trace = await prove(
+      compiled,
+      generateWitness(
+        pythagorean,
+        new Map([
+          [1, 5n],
+          [2, 3n],
+          [3, 4n],
+        ]),
+      ),
+      [5n],
+      { n: compiled.n, blowup: 8, queries: 2, zk: false },
+      31,
+    );
     expect(trace.proof.version).toBe(2);
     for (const label of ['beta', 'gamma', 'alpha', 'zeta', 'rho', 'fri-beta-0']) {
-      expect(trace.transcript.find((entry) => entry.kind === 'squeeze' && entry.label === label)?.extensionValue, label).toBeDefined();
+      expect(
+        trace.transcript.find((entry) => entry.kind === 'squeeze' && entry.label === label)
+          ?.extensionValue,
+        label,
+      ).toBeDefined();
     }
     expect((await verify(compiled, trace.proof)).ok).toBe(true);
   });
 
   it('Z19: protocol-v1 compatibility shares still decode and verify', async () => {
     const compiled = await compile(pythagorean);
-    const proof = (await proveV1ForCompatibility(
-      compiled,
-      generateWitness(pythagorean, new Map([[1, 5n], [2, 3n], [3, 4n]])),
-      [5n],
-      { n: compiled.n, blowup: 8, queries: 2, zk: false },
-      19,
-    )).proof;
+    const proof = (
+      await proveV1ForCompatibility(
+        compiled,
+        generateWitness(
+          pythagorean,
+          new Map([
+            [1, 5n],
+            [2, 3n],
+            [3, 4n],
+          ]),
+        ),
+        [5n],
+        { n: compiled.n, blowup: 8, queries: 2, zk: false },
+        19,
+      )
+    ).proof;
     expect(proof.version).toBe(1);
-    const shared = await decodeShare(await encodeShare({ circuit: pythagorean, publicInputs: [5n], proof }, false));
+    const shared = await decodeShare(
+      await encodeShare({ circuit: pythagorean, publicInputs: [5n], proof }, false),
+    );
     expect(shared.proof.version).toBe(1);
     expect((await verify(await compile(shared.circuit), shared.proof)).ok).toBe(true);
   });
@@ -612,10 +763,20 @@ describe('Phase 2B/2C gates — bound lookups and multiset Sudoku', () => {
     const params = { n: compiled.n, blowup: 8, queries: 1, zk: false };
     const honest = await prove(compiled, generateWitness(age, ageInputs(21n)), [], params, 9);
     expect((await verify(compiled, honest.proof)).ok).toBe(true);
-    const shared = await decodeShare(await encodeShare({ circuit: age, publicInputs: [], proof: honest.proof }, false));
+    const shared = await decodeShare(
+      await encodeShare({ circuit: age, publicInputs: [], proof: honest.proof }, false),
+    );
     expect((await verify(await compile(shared.circuit), shared.proof)).ok).toBe(true);
-    const forged = await tamperWitness(age, ageInputs(21n), new Map([[agePreset.ageWire, 17n]]), params, 9);
-    expect((await verify(compiled, forged.proof)).checks.find((check) => check.id === 'V2')?.ok).toBe(false);
+    const forged = await tamperWitness(
+      age,
+      ageInputs(21n),
+      new Map([[agePreset.ageWire, 17n]]),
+      params,
+      9,
+    );
+    expect(
+      (await verify(compiled, forged.proof)).checks.find((check) => check.id === 'V2')?.ok,
+    ).toBe(false);
   });
 
   it('binds every 9×9 row, column, and box as a tagged multiset', async () => {
@@ -623,11 +784,29 @@ describe('Phase 2B/2C gates — bound lookups and multiset Sudoku', () => {
     expect(compiled.n).toBe(512);
     const publicInputs = sudoku9Givens.map((given) => given.value);
     const params = { n: compiled.n, blowup: 8, queries: 1, zk: false };
-    const honest = await prove(compiled, generateWitness(sudoku9, sudoku9Inputs()), publicInputs, params, 12);
+    const honest = await prove(
+      compiled,
+      generateWitness(sudoku9, sudoku9Inputs()),
+      publicInputs,
+      params,
+      12,
+    );
     expect((await verify(compiled, honest.proof)).ok).toBe(true);
-    expect((await verify(compiled, tamperLeaf(honest, honest.proof.queries[0]!.index).proof)).checks.find((check) => check.id === 'V3')?.ok).toBe(false);
-    const forged = await tamperWitness(sudoku9, sudoku9Inputs(), new Map([[sudoku9CellWires[0]![2]!, 3n]]), params, 12);
-    expect((await verify(compiled, forged.proof)).checks.find((check) => check.id === 'V2')?.ok).toBe(false);
+    expect(
+      (
+        await verify(compiled, tamperLeaf(honest, honest.proof.queries[0]!.index).proof)
+      ).checks.find((check) => check.id === 'V3')?.ok,
+    ).toBe(false);
+    const forged = await tamperWitness(
+      sudoku9,
+      sudoku9Inputs(),
+      new Map([[sudoku9CellWires[0]![2]!, 3n]]),
+      params,
+      12,
+    );
+    expect(
+      (await verify(compiled, forged.proof)).checks.find((check) => check.id === 'V2')?.ok,
+    ).toBe(false);
   }, 30_000);
 });
 
@@ -665,7 +844,14 @@ describe('Phase 2E gates — post-commitment grinding deterrent', () => {
     const compiled = await compile(pythagorean);
     const trace = await prove(
       compiled,
-      generateWitness(pythagorean, new Map([[1, 5n], [2, 3n], [3, 4n]])),
+      generateWitness(
+        pythagorean,
+        new Map([
+          [1, 5n],
+          [2, 3n],
+          [3, 4n],
+        ]),
+      ),
       [5n],
       { n: compiled.n, blowup: 8, queries: 2, zk: false, grindingBits: 4 },
       9,
@@ -673,19 +859,23 @@ describe('Phase 2E gates — post-commitment grinding deterrent', () => {
     expect(trace.proof.grindingNonce).toBeTypeOf('number');
     expect((await verify(compiled, trace.proof)).ok).toBe(true);
     const tampered = { ...trace.proof, grindingNonce: trace.proof.grindingNonce! + 1 };
-    expect((await verify(compiled, tampered)).checks.find((check) => check.id === 'V1')?.ok).toBe(false);
+    expect((await verify(compiled, tampered)).checks.find((check) => check.id === 'V1')?.ok).toBe(
+      false,
+    );
   });
 });
 
 describe('Phase 3 gates — Witness Script', () => {
   it('property-checks canonical pretty-print and parse idempotence', () => {
-    fc.assert(fc.property(
-      fc.constantFrom(...witnessScriptExamples.map((example) => example.source)),
-      (source) => {
-        const once = printWitnessScript(parseWitnessScript(source));
-        expect(printWitnessScript(parseWitnessScript(once))).toBe(once);
-      },
-    ));
+    fc.assert(
+      fc.property(
+        fc.constantFrom(...witnessScriptExamples.map((example) => example.source)),
+        (source) => {
+          const once = printWitnessScript(parseWitnessScript(source));
+          expect(printWitnessScript(parseWitnessScript(once))).toBe(once);
+        },
+      ),
+    );
   });
 
   it.each(witnessScriptExamples)(
@@ -717,7 +907,9 @@ describe('Phase 3 gates — Witness Script', () => {
       ['merkle', 1758],
     ]);
     for (const example of witnessScriptExamples) {
-      expect((await compileWitnessScript(example.source)).circuit.gates.length, example.id).toBe(expected.get(example.id));
+      expect((await compileWitnessScript(example.source)).circuit.gates.length, example.id).toBe(
+        expected.get(example.id),
+      );
     }
   });
 
@@ -730,7 +922,9 @@ describe('Phase 3 gates — Witness Script', () => {
     expect(parseWitnessScript(source).name).toBe('Loop');
     const compiled = await compileWitnessScript(source);
     expect(compiled.circuit.gates.length).toBeGreaterThan(3);
-    expect(() => parseWitnessScript('claim Broken { private x: field assert x == 0; }')).toThrow(WitnessScriptError);
+    expect(() => parseWitnessScript('claim Broken { private x: field assert x == 0; }')).toThrow(
+      WitnessScriptError,
+    );
   });
 
   it('reruns the shared negative attacks against a script-authored circuit', async () => {
@@ -740,11 +934,27 @@ describe('Phase 3 gates — Witness Script', () => {
     const params = { n: compiled.n, blowup: 8, queries: 2, zk: false };
     for (const seed of [3, 11]) {
       const target = script.circuit.gates.find((gate) => gate.op === 'mul')!;
-      const a1 = await tamperWitness(script.circuit, inputs, new Map([[target.id, 1n]]), params, seed);
-      expect((await verify(compiled, a1.proof)).checks.find((check) => check.id === 'V2')?.ok).toBe(false);
-      const honest = await prove(compiled, generateWitness(script.circuit, inputs), [5n], params, seed);
+      const a1 = await tamperWitness(
+        script.circuit,
+        inputs,
+        new Map([[target.id, 1n]]),
+        params,
+        seed,
+      );
+      expect((await verify(compiled, a1.proof)).checks.find((check) => check.id === 'V2')?.ok).toBe(
+        false,
+      );
+      const honest = await prove(
+        compiled,
+        generateWitness(script.circuit, inputs),
+        [5n],
+        params,
+        seed,
+      );
       const a2 = tamperLeaf(honest, honest.proof.queries[0]!.index);
-      expect((await verify(compiled, a2.proof)).checks.find((check) => check.id === 'V3')?.ok).toBe(false);
+      expect((await verify(compiled, a2.proof)).checks.find((check) => check.id === 'V3')?.ok).toBe(
+        false,
+      );
     }
   });
 });
@@ -753,19 +963,33 @@ describe('M8/M9 gates — ZK & sharing', () => {
   it('Z13: blinding changes off-trace openings across seeds; disabled blinding repeats', async () => {
     const polynomial = [3n, 1n, 4n];
     const params = { n: 8, blowup: 8, queries: 4, zk: true };
-    const first = blind(polynomial, 8, params, (() => {
-      let value = 10n;
-      return () => value++;
-    })());
-    const second = blind(polynomial, 8, params, (() => {
-      let value = 20n;
-      return () => value++;
-    })());
+    const first = blind(
+      polynomial,
+      8,
+      params,
+      (() => {
+        let value = 10n;
+        return () => value++;
+      })(),
+    );
+    const second = blind(
+      polynomial,
+      8,
+      params,
+      (() => {
+        let value = 20n;
+        return () => value++;
+      })(),
+    );
     expect(evalAt(first, 7n)).not.toBe(evalAt(second, 7n));
     expect(blind(polynomial, 8, { ...params, zk: false }, () => 99n)).toEqual(polynomial);
 
     const compiled = await compile(pythagorean);
-    const inputs = new Map([[1, 5n], [2, 3n], [3, 4n]]);
+    const inputs = new Map([
+      [1, 5n],
+      [2, 3n],
+      [3, 4n],
+    ]);
     const proofParams = { n: compiled.n, blowup: 8, queries: 2, zk: true };
     const [runA, runB] = await Promise.all([
       prove(compiled, generateWitness(pythagorean, inputs), [5n], proofParams, 7),
@@ -773,8 +997,9 @@ describe('M8/M9 gates — ZK & sharing', () => {
     ]);
     expect((await verify(compiled, runA.proof)).ok).toBe(true);
     expect((await verify(compiled, runB.proof)).ok).toBe(true);
-    expect(runA.proof.openings.find((opening) => opening.label === 'a')?.value)
-      .not.toBe(runB.proof.openings.find((opening) => opening.label === 'a')?.value);
+    expect(runA.proof.openings.find((opening) => opening.label === 'a')?.value).not.toBe(
+      runB.proof.openings.find((opening) => opening.label === 'a')?.value,
+    );
   });
 
   it('ZK transcript illustration is deterministic and requires no witness input', async () => {
@@ -791,13 +1016,22 @@ describe('M8/M9 gates — ZK & sharing', () => {
 
   it('Z14: share codec round-trips a circuit and proof through #p and #pu', async () => {
     const compiled = await compile(pythagorean);
-    const proof = (await prove(
-      compiled,
-      generateWitness(pythagorean, new Map([[1, 5n], [2, 3n], [3, 4n]])),
-      [5n],
-      { n: compiled.n, blowup: 8, queries: 2, zk: false },
-      42,
-    )).proof;
+    const proof = (
+      await prove(
+        compiled,
+        generateWitness(
+          pythagorean,
+          new Map([
+            [1, 5n],
+            [2, 3n],
+            [3, 4n],
+          ]),
+        ),
+        [5n],
+        { n: compiled.n, blowup: 8, queries: 2, zk: false },
+        42,
+      )
+    ).proof;
     const payload = { circuit: pythagorean, publicInputs: [5n], proof };
     const fallback = await encodeShare(payload, false);
     expect(fallback.startsWith('#pu=')).toBe(true);
@@ -812,35 +1046,59 @@ describe('M8/M9 gates — ZK & sharing', () => {
     const script = await compileWitnessScript(witnessScriptExamples[0]!.source);
     const inputs = script.deriveInputs(witnessScriptExamples[0]!.inputs);
     const compiled = await compile(script.circuit);
-    const proof = (await prove(
-      compiled,
-      generateWitness(script.circuit, inputs),
-      [5n],
-      { n: compiled.n, blowup: 8, queries: 2, zk: false },
-      31,
-    )).proof;
+    const proof = (
+      await prove(
+        compiled,
+        generateWitness(script.circuit, inputs),
+        [5n],
+        { n: compiled.n, blowup: 8, queries: 2, zk: false },
+        31,
+      )
+    ).proof;
     const payload = { circuit: script.circuit, publicInputs: [5n], proof };
     expect(await decodeShare(await encodeShare(payload, false))).toEqual(payload);
 
     const changedSource = {
       ...script.circuit,
-      provenance: { kind: 'witness-script' as const, source: `${script.circuit.provenance!.source}\n` },
+      provenance: {
+        kind: 'witness-script' as const,
+        source: `${script.circuit.provenance!.source}\n`,
+      },
     };
-    expect(await compile(changedSource).then((result) => result.digest)).not.toEqual(compiled.digest);
-    expect((await verify(await compile(changedSource), proof)).checks.find((check) => check.id === 'V1')?.ok).toBe(false);
+    expect(await compile(changedSource).then((result) => result.digest)).not.toEqual(
+      compiled.digest,
+    );
+    expect(
+      (await verify(await compile(changedSource), proof)).checks.find((check) => check.id === 'V1')
+        ?.ok,
+    ).toBe(false);
 
     // Provenance-free circuit keeps the frozen protocol-v1 share fingerprint (Z10).
     expect(pythagorean.provenance).toBeUndefined();
     const v1Compiled = await compile(pythagorean);
-    const v1Proof = (await proveV1ForCompatibility(
-      v1Compiled,
-      generateWitness(pythagorean, new Map([[1, 5n], [2, 3n], [3, 4n]])),
-      [5n],
-      { n: v1Compiled.n, blowup: 8, queries: 4, zk: false },
-      42,
-    )).proof;
-    const wire = await encodeShare({ circuit: pythagorean, publicInputs: [5n], proof: v1Proof }, false);
-    const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(wire)));
+    const v1Proof = (
+      await proveV1ForCompatibility(
+        v1Compiled,
+        generateWitness(
+          pythagorean,
+          new Map([
+            [1, 5n],
+            [2, 3n],
+            [3, 4n],
+          ]),
+        ),
+        [5n],
+        { n: v1Compiled.n, blowup: 8, queries: 4, zk: false },
+        42,
+      )
+    ).proof;
+    const wire = await encodeShare(
+      { circuit: pythagorean, publicInputs: [5n], proof: v1Proof },
+      false,
+    );
+    const digest = new Uint8Array(
+      await crypto.subtle.digest('SHA-256', new TextEncoder().encode(wire)),
+    );
     const fingerprint = Array.from(digest, (byte) => byte.toString(16).padStart(2, '0')).join('');
     expect(fingerprint).toBe('d3dcada69ffeeb2a314d658c7552594af45a059f9e5cad4ce45c21df4482b401');
   });

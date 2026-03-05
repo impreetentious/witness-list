@@ -66,7 +66,9 @@ async function hash(bytes: Uint8Array): Promise<Uint8Array> {
 
 export function createTranscript(protocolTag: string): Transcript {
   const protocolBytes = encoder.encode(protocolTag);
-  const log: TranscriptEntry[] = [{ kind: 'absorb', label: 'protocol', bytes: protocolBytes.slice() }];
+  const log: TranscriptEntry[] = [
+    { kind: 'absorb', label: 'protocol', bytes: protocolBytes.slice() },
+  ];
   let state = hash(concatBytes([encoder.encode('protocol'), protocolBytes]));
   let squeezeCounter = 0n;
 
@@ -82,7 +84,9 @@ export function createTranscript(protocolTag: string): Transcript {
     const current = await state;
     const counter = squeezeCounter++;
     return (
-      await hash(concatBytes([current, encoder.encode('squeeze'), encoder.encode(label), u64le(counter)]))
+      await hash(
+        concatBytes([current, encoder.encode('squeeze'), encoder.encode(label), u64le(counter)]),
+      )
     ).slice(0, byteLength);
   }
 
@@ -119,7 +123,10 @@ export function createTranscript(protocolTag: string): Transcript {
         throw new Error('squeezeIndex: domain size must be in [1, 2^32]');
       }
       const bytes = await squeezeBytes(label, 4);
-      const value = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength).getUint32(0, true);
+      const value = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength).getUint32(
+        0,
+        true,
+      );
       log.push({ kind: 'squeeze', label, bytes: bytes.slice() });
       return value % domainSize;
     },

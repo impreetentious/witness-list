@@ -9,7 +9,8 @@ export function quotientChunkLabel(index: number): string {
 }
 
 export function quotientChunkLabels(count: number): string[] {
-  if (!Number.isSafeInteger(count) || count < 3) throw new Error('a quotient needs at least three chunks');
+  if (!Number.isSafeInteger(count) || count < 3)
+    throw new Error('a quotient needs at least three chunks');
   return Array.from({ length: count }, (_, index) => quotientChunkLabel(index));
 }
 

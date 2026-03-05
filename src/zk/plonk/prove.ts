@@ -12,7 +12,13 @@ import { evalAt } from '../poly';
 import { createTranscript } from '../transcript';
 import type { MerkleRoot, Params, ProofV1, ProofTrace } from '../types';
 import { composeConstraints, buildQuotient } from './quotient';
-import { omegaTimes, selectorPolynomials, sigmaPolynomials, zetaIsInLdeCoset, zetaIsInTraceDomain } from './arithmetic';
+import {
+  omegaTimes,
+  selectorPolynomials,
+  sigmaPolynomials,
+  zetaIsInLdeCoset,
+  zetaIsInTraceDomain,
+} from './arithmetic';
 import { buildGrandProduct } from './permutation';
 import { buildFri, deepCompositionAt, domainPoint } from '../fri/fri';
 import { blind, seededFieldSource } from '../zkmode';
@@ -76,32 +82,51 @@ export async function proveV1ForCompatibility(
   await transcript.absorb('z-root', z.tree.root.bytes);
   const alpha = await transcript.squeezeFp('alpha');
 
-  const composition = composeConstraints(circuit, witness, publicInputs, beta, gamma, alpha, { a, b, c, z: zCoefficients });
+  const composition = composeConstraints(circuit, witness, publicInputs, beta, gamma, alpha, {
+    a,
+    b,
+    c,
+    z: zCoefficients,
+  });
   const quotient = buildQuotient(composition.composed, circuit.n, quotientChunkCount(params));
   if (!quotient.exact && !forcePastRemainder) {
-    const rows = quotient.remainderOnH.flatMap((value, row) => value === 0n ? [] : [row]);
+    const rows = quotient.remainderOnH.flatMap((value, row) => (value === 0n ? [] : [row]));
     throw new Error(`constraint composition has nonzero remainder on rows ${rows.join(', ')}`);
   }
-  const quotientCommitments = await Promise.all(quotient.chunks.map((chunk, index) =>
-    commitPolynomial(padded(chunk, circuit.n), params.blowup, quotientChunkLabel(index), ldeSize),
-  ));
-  for (const commitment of quotientCommitments) await transcript.absorb('t-root', commitment.tree.root.bytes);
+  const quotientCommitments = await Promise.all(
+    quotient.chunks.map((chunk, index) =>
+      commitPolynomial(padded(chunk, circuit.n), params.blowup, quotientChunkLabel(index), ldeSize),
+    ),
+  );
+  for (const commitment of quotientCommitments)
+    await transcript.absorb('t-root', commitment.tree.root.bytes);
 
   const zeta = await squeezeZeta(transcript, params);
   const [sA, sB, sC] = sigmaPolynomials(circuit);
   const openingPairs: Array<[string, Fp]> = [
-    ['a', evalAt(a, zeta)], ['b', evalAt(b, zeta)], ['c', evalAt(c, zeta)],
-    ['s-a', evalAt(sA, zeta)], ['s-b', evalAt(sB, zeta)], ['s-c', evalAt(sC, zeta)],
-    ['z', evalAt(zCoefficients, zeta)], ['z-omega', evalAt(zCoefficients, omegaTimes(zeta, circuit.n))],
-    ...quotient.chunks.map((chunk, index) => [quotientChunkLabel(index), evalAt(chunk, zeta)] as [string, Fp]),
+    ['a', evalAt(a, zeta)],
+    ['b', evalAt(b, zeta)],
+    ['c', evalAt(c, zeta)],
+    ['s-a', evalAt(sA, zeta)],
+    ['s-b', evalAt(sB, zeta)],
+    ['s-c', evalAt(sC, zeta)],
+    ['z', evalAt(zCoefficients, zeta)],
+    ['z-omega', evalAt(zCoefficients, omegaTimes(zeta, circuit.n))],
+    ...quotient.chunks.map(
+      (chunk, index) => [quotientChunkLabel(index), evalAt(chunk, zeta)] as [string, Fp],
+    ),
   ];
   const openings: ProofV1['openings'] = openingPairs.map(([label, value]) => ({ label, value }));
-  for (const opening of openings) await transcript.absorbFp(`opening-${opening.label}`, opening.value);
+  for (const opening of openings)
+    await transcript.absorbFp(`opening-${opening.label}`, opening.value);
   const rho = await transcript.squeezeFp('rho');
 
   const claimed = [
-    openingPairs[0]![1], openingPairs[1]![1], openingPairs[2]![1],
-    openingPairs[6]![1], openingPairs[7]![1],
+    openingPairs[0]![1],
+    openingPairs[1]![1],
+    openingPairs[2]![1],
+    openingPairs[6]![1],
+    openingPairs[7]![1],
     ...quotient.chunks.map((_, index) => openingPairs[8 + index]![1]),
   ];
   const deepValues = Array.from<Fp>({ length: ldeSize }).fill(0n);
@@ -112,14 +137,23 @@ export async function proveV1ForCompatibility(
       zeta,
       rho,
       [
-        wires.evaluations[index]![0]!, wires.evaluations[index]![1]!, wires.evaluations[index]![2]!,
-        z.evaluations[index]![0]!, z.evaluations[rotatedZIndex]![0]!,
+        wires.evaluations[index]![0]!,
+        wires.evaluations[index]![1]!,
+        wires.evaluations[index]![2]!,
+        z.evaluations[index]![0]!,
+        z.evaluations[rotatedZIndex]![0]!,
         ...quotientCommitments.map((commitment) => commitment.evaluations[index]![0]!),
       ],
       claimed,
     );
   }
-  const fri = await buildFri(deepValues, friInitialDegreeBound(params), transcript, params.queries, params.grindingBits ?? 0);
+  const fri = await buildFri(
+    deepValues,
+    friInitialDegreeBound(params),
+    transcript,
+    params.queries,
+    params.grindingBits ?? 0,
+  );
   const queries = fri.queries.map((query) => {
     const index = query.index;
     const rotatedZIndex = (index + params.blowup) % ldeSize;
@@ -129,13 +163,23 @@ export async function proveV1ForCompatibility(
         wires: wires.evaluations[index]!.slice(),
         z: z.evaluations[index]!.slice(),
         'z-omega': z.evaluations[rotatedZIndex]!.slice(),
-        ...Object.fromEntries(quotientCommitments.map((commitment, chunk) => [quotientChunkLabel(chunk), commitment.evaluations[index]!.slice()])),
+        ...Object.fromEntries(
+          quotientCommitments.map((commitment, chunk) => [
+            quotientChunkLabel(chunk),
+            commitment.evaluations[index]!.slice(),
+          ]),
+        ),
       },
       paths: {
         wires: wires.tree.path(index),
         z: z.tree.path(index),
         'z-omega': z.tree.path(rotatedZIndex),
-        ...Object.fromEntries(quotientCommitments.map((commitment, chunk) => [quotientChunkLabel(chunk), commitment.tree.path(index)])),
+        ...Object.fromEntries(
+          quotientCommitments.map((commitment, chunk) => [
+            quotientChunkLabel(chunk),
+            commitment.tree.path(index),
+          ]),
+        ),
       },
     };
   });
@@ -180,7 +224,8 @@ export async function proveV1ForCompatibility(
 
 function paramsBytes(params: Params): Uint8Array {
   const grindingBits = params.grindingBits ?? 0;
-  if (!Number.isSafeInteger(grindingBits) || grindingBits < 0 || grindingBits > 24) throw new Error('invalid grinding bits');
+  if (!Number.isSafeInteger(grindingBits) || grindingBits < 0 || grindingBits > 24)
+    throw new Error('invalid grinding bits');
   const bytes = new Uint8Array(grindingBits === 0 ? 13 : 14);
   const view = new DataView(bytes.buffer);
   view.setUint32(0, params.n, true);
@@ -192,20 +237,35 @@ function paramsBytes(params: Params): Uint8Array {
 }
 
 function padded(coefficients: Fp[], n: number): Fp[] {
-  if (coefficients.length > n) throw new Error('M4 quotient chunk exceeds trace-domain degree bound');
+  if (coefficients.length > n)
+    throw new Error('M4 quotient chunk exceeds trace-domain degree bound');
   return [...coefficients, ...Array<Fp>(n - coefficients.length).fill(0n)];
 }
 
-async function commitment(coefficients: Fp[], blowup: number, domainSep: string): Promise<MerkleRoot> {
+async function commitment(
+  coefficients: Fp[],
+  blowup: number,
+  domainSep: string,
+): Promise<MerkleRoot> {
   const evaluations = cosetLDE(coefficients, blowup);
-  return (await buildTree(evaluations.map((value) => [value]), domainSep)).root;
+  return (
+    await buildTree(
+      evaluations.map((value) => [value]),
+      domainSep,
+    )
+  ).root;
 }
 
 async function wireCommitment(a: Fp[], b: Fp[], c: Fp[], blowup: number): Promise<MerkleRoot> {
   const aLde = cosetLDE(a, blowup);
   const bLde = cosetLDE(b, blowup);
   const cLde = cosetLDE(c, blowup);
-  return (await buildTree(aLde.map((value, index) => [value, bLde[index]!, cLde[index]!]), 'wires')).root;
+  return (
+    await buildTree(
+      aLde.map((value, index) => [value, bLde[index]!, cLde[index]!]),
+      'wires',
+    )
+  ).root;
 }
 
 interface CommittedPolynomial {
@@ -213,13 +273,31 @@ interface CommittedPolynomial {
   tree: MerkleTree;
 }
 
-async function commitPolynomial(coefficients: Fp[], blowup: number, domainSep: string, domainSize?: number): Promise<CommittedPolynomial> {
-  const evaluations = (domainSize === undefined ? cosetLDE(coefficients, blowup) : cosetEvaluate(coefficients, domainSize)).map((value) => [value]);
+async function commitPolynomial(
+  coefficients: Fp[],
+  blowup: number,
+  domainSep: string,
+  domainSize?: number,
+): Promise<CommittedPolynomial> {
+  const evaluations = (
+    domainSize === undefined
+      ? cosetLDE(coefficients, blowup)
+      : cosetEvaluate(coefficients, domainSize)
+  ).map((value) => [value]);
   return { evaluations, tree: await buildTree(evaluations, domainSep) };
 }
 
-async function commitWirePolynomials(a: Fp[], b: Fp[], c: Fp[], blowup: number, domainSize?: number): Promise<CommittedPolynomial> {
-  const evaluate = (coefficients: Fp[]) => domainSize === undefined ? cosetLDE(coefficients, blowup) : cosetEvaluate(coefficients, domainSize);
+async function commitWirePolynomials(
+  a: Fp[],
+  b: Fp[],
+  c: Fp[],
+  blowup: number,
+  domainSize?: number,
+): Promise<CommittedPolynomial> {
+  const evaluate = (coefficients: Fp[]) =>
+    domainSize === undefined
+      ? cosetLDE(coefficients, blowup)
+      : cosetEvaluate(coefficients, domainSize);
   const aLde = evaluate(a);
   const bLde = evaluate(b);
   const cLde = evaluate(c);
@@ -255,7 +333,8 @@ export async function proveM4(
     throw new Error('M4 proof parameters do not match the compiled circuit');
   }
   if (params.zk) throw new Error('M4 does not yet combine blinding with its unsound opening path');
-  if ((params.grindingBits ?? 0) !== 0) throw new Error('M4 has no FRI query phase in which to bind grinding work');
+  if ((params.grindingBits ?? 0) !== 0)
+    throw new Error('M4 has no FRI query phase in which to bind grinding work');
 
   const transcript = createTranscript('witness-list/plonk-m4/unsound');
   await transcript.absorb('params', paramsBytes(params));
@@ -280,7 +359,7 @@ export async function proveM4(
   const composition = composeConstraints(circuit, witness, publicInputs, beta, gamma, alpha);
   const quotient = buildQuotient(composition.composed, circuit.n);
   if (!quotient.exact) {
-    const rows = quotient.remainderOnH.flatMap((value, row) => value === 0n ? [] : [row]);
+    const rows = quotient.remainderOnH.flatMap((value, row) => (value === 0n ? [] : [row]));
     throw new Error(`M4 constraint composition has nonzero remainder on rows ${rows.join(', ')}`);
   }
   const tRoots = await Promise.all([
@@ -293,13 +372,21 @@ export async function proveM4(
   const zeta = await squeezeZeta(transcript, params);
   const [sA, sB, sC] = sigmaPolynomials(circuit);
   const openingPairs: Array<[string, Fp]> = [
-    ['a', evalAt(a, zeta)], ['b', evalAt(b, zeta)], ['c', evalAt(c, zeta)],
-    ['s-a', evalAt(sA, zeta)], ['s-b', evalAt(sB, zeta)], ['s-c', evalAt(sC, zeta)],
-    ['z', evalAt(zCoefficients, zeta)], ['z-omega', evalAt(zCoefficients, omegaTimes(zeta, circuit.n))],
-    ['t-lo', evalAt(quotient.tLo, zeta)], ['t-mid', evalAt(quotient.tMid, zeta)], ['t-hi', evalAt(quotient.tHi, zeta)],
+    ['a', evalAt(a, zeta)],
+    ['b', evalAt(b, zeta)],
+    ['c', evalAt(c, zeta)],
+    ['s-a', evalAt(sA, zeta)],
+    ['s-b', evalAt(sB, zeta)],
+    ['s-c', evalAt(sC, zeta)],
+    ['z', evalAt(zCoefficients, zeta)],
+    ['z-omega', evalAt(zCoefficients, omegaTimes(zeta, circuit.n))],
+    ['t-lo', evalAt(quotient.tLo, zeta)],
+    ['t-mid', evalAt(quotient.tMid, zeta)],
+    ['t-hi', evalAt(quotient.tHi, zeta)],
   ];
   const openings: ProofV1['openings'] = openingPairs.map(([label, value]) => ({ label, value }));
-  for (const opening of openings) await transcript.absorbFp(`opening-${opening.label}`, opening.value);
+  for (const opening of openings)
+    await transcript.absorbFp(`opening-${opening.label}`, opening.value);
 
   const proof: ProofV1 = {
     version: 1,

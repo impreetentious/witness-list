@@ -25,17 +25,30 @@ export function M4Preview() {
       const circuit = await compile(pythagorean);
       const trace = await proveM4(
         circuit,
-        generateWitness(pythagorean, new Map([[1, 5n], [2, 3n], [3, 4n]])),
+        generateWitness(
+          pythagorean,
+          new Map([
+            [1, 5n],
+            [2, 3n],
+            [3, 4n],
+          ]),
+        ),
         [5n],
         { n: circuit.n, blowup: 8, queries: 32, zk: false },
         42,
       );
-      if (trace.proof.version !== 1) throw new Error('M4 preview produced an unexpected protocol version');
-      const [m4, full] = await Promise.all([verifyM4(circuit, trace.proof), verify(circuit, trace.proof)]);
+      if (trace.proof.version !== 1)
+        throw new Error('M4 preview produced an unexpected protocol version');
+      const [m4, full] = await Promise.all([
+        verifyM4(circuit, trace.proof),
+        verify(circuit, trace.proof),
+      ]);
       setResult({
         m4Checks: m4.checks,
         fullChecks: full.checks,
-        nonzeroRemainderRows: trace.quotientRemainder.flatMap((value, row) => value === 0n ? [] : [row]),
+        nonzeroRemainderRows: trace.quotientRemainder.flatMap((value, row) =>
+          value === 0n ? [] : [row],
+        ),
       });
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Unknown proving error');
@@ -49,12 +62,12 @@ export function M4Preview() {
       <p className="eyebrow">Development preview</p>
       <h2 id="m4-preview-title">The identity, before FRI</h2>
       <p>
-        This runs the Pythagorean witness (3, 4, 5) through real PLONK row constraints,
-        commitments, Fiat–Shamir challenges, and the identity at ζ.
+        This runs the Pythagorean witness (3, 4, 5) through real PLONK row constraints, commitments,
+        Fiat–Shamir challenges, and the identity at ζ.
       </p>
       <p className="warning">
-        <strong>Unsound alone.</strong> This is M4 only: it has no DEEP composition, FRI,
-        query openings, or low-degree soundness check. The full verifier therefore rejects it.
+        <strong>Unsound alone.</strong> This is M4 only: it has no DEEP composition, FRI, query
+        openings, or low-degree soundness check. The full verifier therefore rejects it.
       </p>
       <button type="button" onClick={runPreview} disabled={running}>
         {running ? 'Checking the identity…' : 'Run M4 Identity Preview'}
@@ -63,7 +76,10 @@ export function M4Preview() {
       {result !== undefined && (
         <div className="preview-results">
           <p className="pass">
-            Quotient remainder: {result.nonzeroRemainderRows.length === 0 ? 'zero on every row' : `nonzero at rows ${result.nonzeroRemainderRows.join(', ')}`}
+            Quotient remainder:{' '}
+            {result.nonzeroRemainderRows.length === 0
+              ? 'zero on every row'
+              : `nonzero at rows ${result.nonzeroRemainderRows.join(', ')}`}
           </p>
           <div>
             <h3>M4 checks</h3>

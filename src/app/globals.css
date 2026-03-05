@@ -55,11 +55,21 @@ select {
   padding: 0.85rem;
 }
 
-.workshop-pane-author { grid-area: author; }
-.workshop-pane-circuit { grid-area: circuit; }
-.workshop-pane-bound { grid-area: bound; }
-.workshop-pane-player { grid-area: player; }
-.workshop-pane-zk { grid-area: zk; }
+.workshop-pane-author {
+  grid-area: author;
+}
+.workshop-pane-circuit {
+  grid-area: circuit;
+}
+.workshop-pane-bound {
+  grid-area: bound;
+}
+.workshop-pane-player {
+  grid-area: player;
+}
+.workshop-pane-zk {
+  grid-area: zk;
+}
 
 .pane-label {
   color: var(--accent);

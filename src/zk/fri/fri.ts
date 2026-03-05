@@ -100,7 +100,10 @@ export function deepCompositionAt(
   let rhoPower = 1n;
   let composition = 0n;
   for (let index = 0; index < valuesAtX.length; index++) {
-    composition = add(composition, mul(rhoPower, mul(sub(valuesAtX[index]!, claimedValues[index]!), denominatorInverse)));
+    composition = add(
+      composition,
+      mul(rhoPower, mul(sub(valuesAtX[index]!, claimedValues[index]!), denominatorInverse)),
+    );
     rhoPower = mul(rhoPower, rho);
   }
   return composition;
@@ -140,7 +143,8 @@ export async function buildFri(
   if (!Number.isSafeInteger(initialDegreeBound) || initialDegreeBound < 1) {
     throw new Error('FRI degree bound must be positive');
   }
-  if (!Number.isSafeInteger(queries) || queries < 1) throw new Error('FRI query count must be positive');
+  if (!Number.isSafeInteger(queries) || queries < 1)
+    throw new Error('FRI query count must be positive');
   validateGrindingBits(grindingBits);
   log2PowerOfTwo(initialValues.length, 'FRI initial layer');
 
@@ -148,7 +152,10 @@ export async function buildFri(
   let values = initialValues.slice();
   let shift = GENERATOR;
   let degreeBound = initialDegreeBound;
-  let tree = await buildTree(values.map((value) => [value]), 'fri-0');
+  let tree = await buildTree(
+    values.map((value) => [value]),
+    'fri-0',
+  );
   layers.push({ values, tree, shift });
   await transcript.absorb('fri-root-0', tree.root.bytes);
 
@@ -158,22 +165,36 @@ export async function buildFri(
     values = foldLayer(values, beta, shift);
     shift = mul(shift, shift);
     degreeBound = Math.ceil(degreeBound / 2);
-    tree = await buildTree(values.map((value) => [value]), `fri-${layers.length}`);
+    tree = await buildTree(
+      values.map((value) => [value]),
+      `fri-${layers.length}`,
+    );
     layers.push({ values, tree, shift });
     await transcript.absorb(`fri-root-${layers.length - 1}`, tree.root.bytes);
   }
 
-  const finalCoeffs = interpolateCoset(layers[layers.length - 1]!.values, layers[layers.length - 1]!.shift);
+  const finalCoeffs = interpolateCoset(
+    layers[layers.length - 1]!.values,
+    layers[layers.length - 1]!.shift,
+  );
   if (finalCoeffs.length > FINAL_DEGREE_BOUND) {
-    throw new Error(`FRI final polynomial has degree bound ${finalCoeffs.length - 1}, expected < ${FINAL_DEGREE_BOUND}`);
+    throw new Error(
+      `FRI final polynomial has degree bound ${finalCoeffs.length - 1}, expected < ${FINAL_DEGREE_BOUND}`,
+    );
   }
   // A fixed-width encoding binds both the coefficients and their degree bound.
-  const finalPadded = [...finalCoeffs, ...Array<Fp>(FINAL_DEGREE_BOUND - finalCoeffs.length).fill(0n)];
+  const finalPadded = [
+    ...finalCoeffs,
+    ...Array<Fp>(FINAL_DEGREE_BOUND - finalCoeffs.length).fill(0n),
+  ];
   for (const coefficient of finalPadded) await transcript.absorbFp('fri-final-coeff', coefficient);
 
   let grindingNonce: number | undefined;
   if (grindingBits > 0) {
-    grindingNonce = await findGrindingNonce(await transcript.workDigest('fri-grinding'), grindingBits);
+    grindingNonce = await findGrindingNonce(
+      await transcript.workDigest('fri-grinding'),
+      grindingBits,
+    );
     await transcript.absorb('fri-grinding-nonce', encodeGrindingNonce(grindingNonce));
   }
 
@@ -203,5 +224,10 @@ export async function buildFri(
       finalLayer: { value: finalLayer.values[layerIndex]!, path: finalLayer.tree.path(layerIndex) },
     });
   }
-  return { roots: layers.map((layer) => layer.tree.root), finalCoeffs: finalPadded, grindingNonce, queries: queryOpenings };
+  return {
+    roots: layers.map((layer) => layer.tree.root),
+    finalCoeffs: finalPadded,
+    grindingNonce,
+    queries: queryOpenings,
+  };
 }

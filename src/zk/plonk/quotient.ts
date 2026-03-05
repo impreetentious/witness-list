@@ -54,7 +54,9 @@ export function composeConstraints(
   committed?: CommittedPolynomials,
 ): ConstraintComposition {
   if (publicInputs.length !== circuit.publicRows) {
-    throw new Error(`expected ${circuit.publicRows} public inputs, received ${publicInputs.length}`);
+    throw new Error(
+      `expected ${circuit.publicRows} public inputs, received ${publicInputs.length}`,
+    );
   }
   const grandProduct = buildGrandProduct(circuit, witness, beta, gamma);
   const { numerators, denominators } = permutationFactors(circuit, witness, beta, gamma);
@@ -67,7 +69,10 @@ export function composeConstraints(
   for (let row = 0; row < circuit.n; row++) {
     let gate = add(
       add(mul(circuit.qL[row]!, witness.a[row]!), mul(circuit.qR[row]!, witness.b[row]!)),
-      add(mul(circuit.qO[row]!, witness.c[row]!), mul(circuit.qM[row]!, mul(witness.a[row]!, witness.b[row]!))),
+      add(
+        mul(circuit.qO[row]!, witness.c[row]!),
+        mul(circuit.qM[row]!, mul(witness.a[row]!, witness.b[row]!)),
+      ),
     );
     gate = add(gate, circuit.qC[row]!);
     if (row < circuit.publicRows) gate = sub(gate, publicInputs[row]!);
@@ -77,7 +82,10 @@ export function composeConstraints(
       mul(grandProduct.z[(row + 1) % circuit.n]!, denominators[row]!),
     );
     if (row === 0) boundaryOnH[row] = sub(grandProduct.z[0]!, 1n);
-    composedOnH[row] = add(gate, add(mul(alpha, transitionOnH[row]!), mul(alphaSquared, boundaryOnH[row]!)));
+    composedOnH[row] = add(
+      gate,
+      add(mul(alpha, transitionOnH[row]!), mul(alphaSquared, boundaryOnH[row]!)),
+    );
   }
   const wirePolynomials = [witness.a, witness.b, witness.c].map(interpolate);
   const a = committed?.a ?? wirePolynomials[0]!;
@@ -97,18 +105,24 @@ export function composeConstraints(
   const identityA: Poly = [0n, 1n];
   const identityB: Poly = [0n, 7n];
   const identityC: Poly = [0n, 49n];
-  const constant = (value: Fp): Poly => value === 0n ? [] : [value];
+  const constant = (value: Fp): Poly => (value === 0n ? [] : [value]);
   const linearFactor = (wire: Poly, idOrSigma: Poly): Poly =>
     polyAdd(polyAdd(wire, polyScale(idOrSigma, beta)), constant(gamma));
-  const product3 = (left: Poly, middle: Poly, right: Poly): Poly => polyMul(polyMul(left, middle), right);
+  const product3 = (left: Poly, middle: Poly, right: Poly): Poly =>
+    polyMul(polyMul(left, middle), right);
   const gate = polyAdd(
     polyAdd(polyMul(qL, a), polyMul(qR, b)),
     polyAdd(polyMul(qO, c), polyAdd(polyMul(qM, polyMul(a, b)), qC)),
   );
   const publicInputValues = Array.from<Fp>({ length: circuit.n }).fill(0n);
-  for (let row = 0; row < publicInputs.length; row++) publicInputValues[row] = neg(publicInputs[row]!);
+  for (let row = 0; row < publicInputs.length; row++)
+    publicInputValues[row] = neg(publicInputs[row]!);
   const gateWithPublicInputs = polyAdd(gate, interpolate(publicInputValues));
-  const numerator = product3(linearFactor(a, identityA), linearFactor(b, identityB), linearFactor(c, identityC));
+  const numerator = product3(
+    linearFactor(a, identityA),
+    linearFactor(b, identityB),
+    linearFactor(c, identityC),
+  );
   const denominator = product3(linearFactor(a, sA), linearFactor(b, sB), linearFactor(c, sC));
   const omega = twoAdicRoot(Math.log2(circuit.n));
   let omegaPower = 1n;
@@ -136,7 +150,8 @@ export function buildQuotient(
   if (!Number.isSafeInteger(n) || n < 1 || (n & (n - 1)) !== 0) {
     throw new Error('quotient domain size must be a positive power of two');
   }
-  if (!Number.isSafeInteger(chunkCount) || chunkCount < 3) throw new Error('quotient needs at least three chunks');
+  if (!Number.isSafeInteger(chunkCount) || chunkCount < 3)
+    throw new Error('quotient needs at least three chunks');
   const { q, r } = polyDivRem(composed, vanishing(n));
   const omega = twoAdicRoot(Math.log2(n));
   const remainderOnH = Array.from<Fp>({ length: n }).fill(0n);
@@ -146,7 +161,9 @@ export function buildQuotient(
     point = mul(point, omega);
   }
 
-  const chunks = Array.from({ length: chunkCount }, (_, chunk) => q.slice(chunk * n, (chunk + 1) * n));
+  const chunks = Array.from({ length: chunkCount }, (_, chunk) =>
+    q.slice(chunk * n, (chunk + 1) * n),
+  );
   if (q.length > chunkCount * n) throw new Error('quotient exceeds its committed chunk layout');
   return {
     tLo: chunks[0]!,

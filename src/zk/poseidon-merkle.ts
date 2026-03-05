@@ -31,16 +31,21 @@ export async function buildPoseidonTree(leaves: readonly Fp[]): Promise<Poseidon
   const layers: Fp[][] = [leaves.slice()];
   while (layers.at(-1)!.length > 1) {
     const current = layers.at(-1)!;
-    layers.push(await Promise.all(Array.from({ length: current.length / 2 }, (_, index) =>
-      poseidonNodeHash(current[index * 2]!, current[index * 2 + 1]!),
-    )));
+    layers.push(
+      await Promise.all(
+        Array.from({ length: current.length / 2 }, (_, index) =>
+          poseidonNodeHash(current[index * 2]!, current[index * 2 + 1]!),
+        ),
+      ),
+    );
   }
   return {
     root: layers.at(-1)![0]!,
     leaves: leaves.slice(),
     layers,
     open(index: number): PoseidonMerklePath {
-      if (!Number.isSafeInteger(index) || index < 0 || index >= leaves.length) throw new Error('Poseidon Merkle opening index out of range');
+      if (!Number.isSafeInteger(index) || index < 0 || index >= leaves.length)
+        throw new Error('Poseidon Merkle opening index out of range');
       let cursor = index;
       const siblings: Fp[] = [];
       for (const layer of layers.slice(0, -1)) {
@@ -52,14 +57,24 @@ export async function buildPoseidonTree(leaves: readonly Fp[]): Promise<Poseidon
   };
 }
 
-export async function verifyPoseidonPath(root: Fp, leaf: Fp, path: PoseidonMerklePath): Promise<boolean> {
-  if (!Number.isSafeInteger(path.leafIndex) || path.leafIndex < 0 || path.leafIndex >= 2 ** path.siblings.length) return false;
+export async function verifyPoseidonPath(
+  root: Fp,
+  leaf: Fp,
+  path: PoseidonMerklePath,
+): Promise<boolean> {
+  if (
+    !Number.isSafeInteger(path.leafIndex) ||
+    path.leafIndex < 0 ||
+    path.leafIndex >= 2 ** path.siblings.length
+  )
+    return false;
   let cursor = path.leafIndex;
   let value = leaf;
   for (const sibling of path.siblings) {
-    value = (cursor & 1) === 0
-      ? await poseidonNodeHash(value, sibling)
-      : await poseidonNodeHash(sibling, value);
+    value =
+      (cursor & 1) === 0
+        ? await poseidonNodeHash(value, sibling)
+        : await poseidonNodeHash(sibling, value);
     cursor >>= 1;
   }
   return value === root;

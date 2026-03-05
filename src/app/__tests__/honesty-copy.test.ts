@@ -48,7 +48,9 @@ describe('Z21: honesty copy cannot silently regress', () => {
 
   it('keeps the live §4.11 readout formula shape beside the parameters', () => {
     // The formula must remain computed from live params, not a static disclaimer.
-    expect(security).toMatch(/ε ≈ max\(3n \/ \(p² − \|D\|\), \(1\/\{params\.blowup\}\)\^\{params\.queries\}, 2⁻³²\)/);
+    expect(security).toMatch(
+      /ε ≈ max\(3n \/ \(p² − \|D\|\), \(1\/\{params\.blowup\}\)\^\{params\.queries\}, 2⁻³²\)/,
+    );
     expect(security).toMatch(/params\.queries/);
     expect(security).toMatch(/params\.blowup/);
     expect(security).toMatch(/2⁻³²/);
@@ -77,11 +79,11 @@ describe('zk/ purity boundary', () => {
     for (const file of walkTsFiles(zkRoot)) {
       const source = readFileSync(file, 'utf8');
       if (
-        /\bfrom\s+['"]react(?:-dom)?(?:\/[^'"]*)?['"]/.test(source)
-        || /\bfrom\s+['"]react\/jsx-runtime['"]/.test(source)
-        || /\bdocument\./.test(source)
-        || /\bwindow\./.test(source)
-        || /\bHTMLElement\b/.test(source)
+        /\bfrom\s+['"]react(?:-dom)?(?:\/[^'"]*)?['"]/.test(source) ||
+        /\bfrom\s+['"]react\/jsx-runtime['"]/.test(source) ||
+        /\bdocument\./.test(source) ||
+        /\bwindow\./.test(source) ||
+        /\bHTMLElement\b/.test(source)
       ) {
         offenders.push(relative(root, file));
       }

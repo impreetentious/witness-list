@@ -19,7 +19,12 @@ import { compile, generateWitness } from './circuit/compile';
 import { proveForcedPastRemainder } from './plonk/prove';
 import { buildGrandProduct } from './plonk/permutation';
 import { buildQuotient, composeConstraints } from './plonk/quotient';
-import { omegaTimes, sigmaPolynomials, zetaIsInLdeCoset, zetaIsInTraceDomain } from './plonk/arithmetic';
+import {
+  omegaTimes,
+  sigmaPolynomials,
+  zetaIsInLdeCoset,
+  zetaIsInTraceDomain,
+} from './plonk/arithmetic';
 import { buildFri, deepCompositionAt, domainPoint, interpolateCoset } from './fri/fri';
 import { verify } from './plonk/verify';
 
@@ -38,7 +43,13 @@ export async function tamperWitness(
     if (value === undefined) throw new Error(`attack A1 is missing public input wire ${wire}`);
     return mod(value);
   });
-  return proveForcedPastRemainder(compiled, generateWitness(circuit, inputs, overrides), publicInputs, params, seed);
+  return proveForcedPastRemainder(
+    compiled,
+    generateWitness(circuit, inputs, overrides),
+    publicInputs,
+    params,
+    seed,
+  );
 }
 
 /**
@@ -48,19 +59,42 @@ export async function tamperWitness(
  */
 export function tamperLeaf(trace: ProofTrace, leafIndex: number): ProofTrace {
   const queryIndex = trace.proof.queries.findIndex((query) => query.index === leafIndex);
-  if (queryIndex < 0) throw new Error(`attack A2 needs a queried leaf index; ${leafIndex} was not queried`);
+  if (queryIndex < 0)
+    throw new Error(`attack A2 needs a queried leaf index; ${leafIndex} was not queried`);
   const query = trace.proof.queries[queryIndex]!;
   const wires = query.leaves.wires;
-  if (wires === undefined || wires.length !== 3) throw new Error('attack A2 proof has no composite wire leaf');
-  const proof = trace.proof.version === 1
-    ? { ...trace.proof, queries: trace.proof.queries.map((candidate, index) => index !== queryIndex ? candidate : {
-      ...candidate,
-      leaves: { ...candidate.leaves, wires: [add(wires[0]!, 1n), wires[1]!, wires[2]!] },
-    }) as QueryOpeningV1[] }
-    : { ...trace.proof, queries: trace.proof.queries.map((candidate, index) => index !== queryIndex ? candidate : {
-      ...candidate,
-      leaves: { ...candidate.leaves, wires: [add(wires[0]!, 1n), wires[1]!, wires[2]!] },
-    }) as QueryOpening[] };
+  if (wires === undefined || wires.length !== 3)
+    throw new Error('attack A2 proof has no composite wire leaf');
+  const proof =
+    trace.proof.version === 1
+      ? {
+          ...trace.proof,
+          queries: trace.proof.queries.map((candidate, index) =>
+            index !== queryIndex
+              ? candidate
+              : {
+                  ...candidate,
+                  leaves: {
+                    ...candidate.leaves,
+                    wires: [add(wires[0]!, 1n), wires[1]!, wires[2]!],
+                  },
+                },
+          ) as QueryOpeningV1[],
+        }
+      : {
+          ...trace.proof,
+          queries: trace.proof.queries.map((candidate, index) =>
+            index !== queryIndex
+              ? candidate
+              : {
+                  ...candidate,
+                  leaves: {
+                    ...candidate.leaves,
+                    wires: [add(wires[0]!, 1n), wires[1]!, wires[2]!],
+                  },
+                },
+          ) as QueryOpening[],
+        };
   return { ...trace, proof };
 }
 
@@ -91,11 +125,16 @@ function paramsBytes(params: Params): Uint8Array {
 }
 
 function padded(coefficients: Fp[], n: number): Fp[] {
-  if (coefficients.length > n) throw new Error('attack quotient chunk exceeds trace-domain degree bound');
+  if (coefficients.length > n)
+    throw new Error('attack quotient chunk exceeds trace-domain degree bound');
   return [...coefficients, ...Array<Fp>(n - coefficients.length).fill(0n)];
 }
 
-async function commitPolynomial(coefficients: Fp[], blowup: number, domainSep: string): Promise<CommittedValues> {
+async function commitPolynomial(
+  coefficients: Fp[],
+  blowup: number,
+  domainSep: string,
+): Promise<CommittedValues> {
   const evaluations = cosetLDE(coefficients, blowup).map((value) => [value]);
   return { evaluations, tree: await buildTree(evaluations, domainSep) };
 }
@@ -121,9 +160,14 @@ async function squeezeZeta(
 }
 
 /** Rebuild the ordinary commitments and transcript state up to the ζ openings. */
-async function createGrindingContext(circuit: Circuit, inputs: Map<number, Fp>, params: Params): Promise<GrindingContext> {
+async function createGrindingContext(
+  circuit: Circuit,
+  inputs: Map<number, Fp>,
+  params: Params,
+): Promise<GrindingContext> {
   const compiled = await compile(circuit);
-  if (params.n !== compiled.n || params.zk) throw new Error('attack A3 needs an unblinded parameter set matching its circuit');
+  if (params.n !== compiled.n || params.zk)
+    throw new Error('attack A3 needs an unblinded parameter set matching its circuit');
   const publicInputs = circuit.publicOrder.map((wire) => {
     const value = inputs.get(wire);
     if (value === undefined) throw new Error(`attack A3 is missing public input wire ${wire}`);
@@ -145,28 +189,41 @@ async function createGrindingContext(circuit: Circuit, inputs: Map<number, Fp>, 
   const z = await commitPolynomial(zCoefficients, params.blowup, 'z');
   await transcript.absorb('z-root', z.tree.root.bytes);
   const alpha = await transcript.squeezeFp('alpha');
-  const quotient = buildQuotient(composeConstraints(compiled, witness, publicInputs, beta, gamma, alpha).composed, compiled.n);
+  const quotient = buildQuotient(
+    composeConstraints(compiled, witness, publicInputs, beta, gamma, alpha).composed,
+    compiled.n,
+  );
   if (!quotient.exact) throw new Error('attack A3 needs an honest statement as its starting point');
-  const t = await Promise.all([
+  const t = (await Promise.all([
     commitPolynomial(padded(quotient.tLo, compiled.n), params.blowup, 't-lo'),
     commitPolynomial(padded(quotient.tMid, compiled.n), params.blowup, 't-mid'),
     commitPolynomial(padded(quotient.tHi, compiled.n), params.blowup, 't-hi'),
-  ]) as [CommittedValues, CommittedValues, CommittedValues];
+  ])) as [CommittedValues, CommittedValues, CommittedValues];
   for (const commitment of t) await transcript.absorb('t-root', commitment.tree.root.bytes);
   const zeta = await squeezeZeta(transcript, params);
   const [sA, sB, sC] = sigmaPolynomials(compiled);
   const openingPairs: Array<[string, Fp]> = [
-    ['a', evalAt(a, zeta)], ['b', evalAt(b, zeta)], ['c', evalAt(c, zeta)],
-    ['s-a', evalAt(sA, zeta)], ['s-b', evalAt(sB, zeta)], ['s-c', evalAt(sC, zeta)],
-    ['z', evalAt(zCoefficients, zeta)], ['z-omega', evalAt(zCoefficients, omegaTimes(zeta, compiled.n))],
-    ['t-lo', evalAt(quotient.tLo, zeta)], ['t-mid', evalAt(quotient.tMid, zeta)], ['t-hi', evalAt(quotient.tHi, zeta)],
+    ['a', evalAt(a, zeta)],
+    ['b', evalAt(b, zeta)],
+    ['c', evalAt(c, zeta)],
+    ['s-a', evalAt(sA, zeta)],
+    ['s-b', evalAt(sB, zeta)],
+    ['s-c', evalAt(sC, zeta)],
+    ['z', evalAt(zCoefficients, zeta)],
+    ['z-omega', evalAt(zCoefficients, omegaTimes(zeta, compiled.n))],
+    ['t-lo', evalAt(quotient.tLo, zeta)],
+    ['t-mid', evalAt(quotient.tMid, zeta)],
+    ['t-hi', evalAt(quotient.tHi, zeta)],
   ];
   const openings: ProofV1['openings'] = openingPairs.map(([label, value]) => ({ label, value }));
   return { circuit: compiled, params, publicInputs, zeta, openings, wires, z, t };
 }
 
 /** Recreate the transcript through rho after changing only the claimed t chunks. */
-async function transcriptToRho(context: GrindingContext, openings: ProofV1['openings']): Promise<Fp> {
+async function transcriptToRho(
+  context: GrindingContext,
+  openings: ProofV1['openings'],
+): Promise<Fp> {
   const transcript = createTranscript('witness-list/plonk-v1');
   await transcript.absorb('params', paramsBytes(context.params));
   await transcript.absorb('circuit-digest', context.circuit.digest);
@@ -178,8 +235,10 @@ async function transcriptToRho(context: GrindingContext, openings: ProofV1['open
   await transcript.squeezeFp('alpha');
   for (const commitment of context.t) await transcript.absorb('t-root', commitment.tree.root.bytes);
   const zeta = await squeezeZeta(transcript, context.params);
-  if (zeta !== context.zeta) throw new Error('attack A3 transcript replay diverged before openings');
-  for (const opening of openings) await transcript.absorbFp(`opening-${opening.label}`, opening.value);
+  if (zeta !== context.zeta)
+    throw new Error('attack A3 transcript replay diverged before openings');
+  for (const opening of openings)
+    await transcript.absorbFp(`opening-${opening.label}`, opening.value);
   return transcript.squeezeFp('rho');
 }
 
@@ -191,11 +250,20 @@ async function forgedGrindingProof(context: GrindingContext, nonce: number): Pro
   const zetaN = pow(context.zeta, BigInt(context.circuit.n));
   openingByLabel.set('t-lo', add(openingByLabel.get('t-lo')!, delta));
   openingByLabel.set('t-mid', sub(openingByLabel.get('t-mid')!, mul(delta, inv(zetaN))));
-  const openings = context.openings.map((opening) => ({ label: opening.label, value: openingByLabel.get(opening.label)! }));
+  const openings = context.openings.map((opening) => ({
+    label: opening.label,
+    value: openingByLabel.get(opening.label)!,
+  }));
   const rho = await transcriptToRho(context, openings);
   const claims = [
-    openingByLabel.get('a')!, openingByLabel.get('b')!, openingByLabel.get('c')!, openingByLabel.get('z')!,
-    openingByLabel.get('z-omega')!, openingByLabel.get('t-lo')!, openingByLabel.get('t-mid')!, openingByLabel.get('t-hi')!,
+    openingByLabel.get('a')!,
+    openingByLabel.get('b')!,
+    openingByLabel.get('c')!,
+    openingByLabel.get('z')!,
+    openingByLabel.get('z-omega')!,
+    openingByLabel.get('t-lo')!,
+    openingByLabel.get('t-mid')!,
+    openingByLabel.get('t-hi')!,
   ];
   const ldeSize = context.circuit.n * context.params.blowup;
   const offset = nonce % context.params.blowup;
@@ -204,11 +272,18 @@ async function forgedGrindingProof(context: GrindingContext, nonce: number): Pro
     const index = offset + row * context.params.blowup;
     const rotatedZIndex = (index + context.params.blowup) % ldeSize;
     sampleValues[row] = deepCompositionAt(
-      domainPoint(index, ldeSize), context.zeta, rho,
+      domainPoint(index, ldeSize),
+      context.zeta,
+      rho,
       [
-        context.wires.evaluations[index]![0]!, context.wires.evaluations[index]![1]!, context.wires.evaluations[index]![2]!,
-        context.z.evaluations[index]![0]!, context.z.evaluations[rotatedZIndex]![0]!,
-        context.t[0].evaluations[index]![0]!, context.t[1].evaluations[index]![0]!, context.t[2].evaluations[index]![0]!,
+        context.wires.evaluations[index]![0]!,
+        context.wires.evaluations[index]![1]!,
+        context.wires.evaluations[index]![2]!,
+        context.z.evaluations[index]![0]!,
+        context.z.evaluations[rotatedZIndex]![0]!,
+        context.t[0].evaluations[index]![0]!,
+        context.t[1].evaluations[index]![0]!,
+        context.t[2].evaluations[index]![0]!,
       ],
       claims,
     );
@@ -225,12 +300,14 @@ async function forgedGrindingProof(context: GrindingContext, nonce: number): Pro
   await transcript.absorb('circuit-digest', context.circuit.digest);
   for (const input of context.publicInputs) await transcript.absorbFp('public-input', input);
   await transcript.absorb('wires-root', context.wires.tree.root.bytes);
-  await transcript.squeezeFp('beta'); await transcript.squeezeFp('gamma');
+  await transcript.squeezeFp('beta');
+  await transcript.squeezeFp('gamma');
   await transcript.absorb('z-root', context.z.tree.root.bytes);
   await transcript.squeezeFp('alpha');
   for (const commitment of context.t) await transcript.absorb('t-root', commitment.tree.root.bytes);
   await squeezeZeta(transcript, context.params);
-  for (const opening of openings) await transcript.absorbFp(`opening-${opening.label}`, opening.value);
+  for (const opening of openings)
+    await transcript.absorbFp(`opening-${opening.label}`, opening.value);
   await transcript.squeezeFp('rho');
   const fri = await buildFri(fakeValues, context.circuit.n, transcript, context.params.queries);
   const queries = fri.queries.map((query) => {
@@ -247,8 +324,12 @@ async function forgedGrindingProof(context: GrindingContext, nonce: number): Pro
         't-hi': context.t[2].evaluations[index]!.slice(),
       },
       paths: {
-        wires: context.wires.tree.path(index), z: context.z.tree.path(index), 'z-omega': context.z.tree.path(rotatedZIndex),
-        't-lo': context.t[0].tree.path(index), 't-mid': context.t[1].tree.path(index), 't-hi': context.t[2].tree.path(index),
+        wires: context.wires.tree.path(index),
+        z: context.z.tree.path(index),
+        'z-omega': context.z.tree.path(rotatedZIndex),
+        't-lo': context.t[0].tree.path(index),
+        't-mid': context.t[1].tree.path(index),
+        't-hi': context.t[2].tree.path(index),
       },
     };
   });
@@ -279,13 +360,21 @@ export async function grindChallenge(
   weakQueries: number,
   maxAttempts: number,
 ): Promise<{ attempts: number; succeeded: boolean }> {
-  if (!Number.isSafeInteger(weakQueries) || weakQueries < 1) throw new Error('attack A3 needs at least one query');
-  if (!Number.isSafeInteger(maxAttempts) || maxAttempts < 1) throw new Error('attack A3 needs a positive attempt budget');
+  if (!Number.isSafeInteger(weakQueries) || weakQueries < 1)
+    throw new Error('attack A3 needs at least one query');
+  if (!Number.isSafeInteger(maxAttempts) || maxAttempts < 1)
+    throw new Error('attack A3 needs a positive attempt budget');
   const compiled = await compile(circuit);
-  const context = await createGrindingContext(circuit, inputs, { n: compiled.n, blowup: A3_BLOWUP, queries: weakQueries, zk: false });
+  const context = await createGrindingContext(circuit, inputs, {
+    n: compiled.n,
+    blowup: A3_BLOWUP,
+    queries: weakQueries,
+    zk: false,
+  });
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     const proof = await forgedGrindingProof(context, attempt);
-    if ((await verify(context.circuit, proof)).ok) return { attempts: attempt + 1, succeeded: true };
+    if ((await verify(context.circuit, proof)).ok)
+      return { attempts: attempt + 1, succeeded: true };
   }
   return { attempts: maxAttempts, succeeded: false };
 }
@@ -295,9 +384,15 @@ export async function grindChallenge(
  * forged-proof path above is exercised by the Z12 smoke gate; this lightweight
  * companion makes the 200-trial rate assertion practical in normal CI.
  */
-export function sampleGrindingAttempts(weakQueries: number, trials: number, seed = 0x51a3): number[] {
-  if (!Number.isSafeInteger(weakQueries) || weakQueries < 1) throw new Error('A3 samples need at least one query');
-  if (!Number.isSafeInteger(trials) || trials < 1) throw new Error('A3 samples need a positive trial count');
+export function sampleGrindingAttempts(
+  weakQueries: number,
+  trials: number,
+  seed = 0x51a3,
+): number[] {
+  if (!Number.isSafeInteger(weakQueries) || weakQueries < 1)
+    throw new Error('A3 samples need at least one query');
+  if (!Number.isSafeInteger(trials) || trials < 1)
+    throw new Error('A3 samples need a positive trial count');
   let state = seed >>> 0;
   const next = (): number => {
     state = (state + 0x6d2b79f5) >>> 0;

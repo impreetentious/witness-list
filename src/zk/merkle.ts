@@ -87,7 +87,10 @@ export async function buildTree(leaves: Fp[][], domainSep: string): Promise<Merk
 
   while (levels[levels.length - 1]!.length > 1) {
     const previous = levels[levels.length - 1]!;
-    const parents: Uint8Array[] = Array.from({ length: previous.length >> 1 }, () => new Uint8Array());
+    const parents: Uint8Array[] = Array.from(
+      { length: previous.length >> 1 },
+      () => new Uint8Array(),
+    );
     for (let i = 0; i < previous.length; i += 2) {
       parents[i >> 1] = await hashNode(previous[i]!, previous[i + 1]!);
     }
@@ -125,9 +128,8 @@ export async function verifyPath(
   let index = path.leafIndex;
   for (const sibling of path.siblings) {
     if (sibling.length !== 32) return false;
-    current = (index & 1) === 0
-      ? await hashNode(current, sibling)
-      : await hashNode(sibling, current);
+    current =
+      (index & 1) === 0 ? await hashNode(current, sibling) : await hashNode(sibling, current);
     index >>= 1;
   }
   return sameBytes(current, root.bytes);

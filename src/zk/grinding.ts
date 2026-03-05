@@ -5,7 +5,8 @@
  */
 
 function nonceBytes(nonce: number): Uint8Array {
-  if (!Number.isSafeInteger(nonce) || nonce < 0 || nonce > 0xffffffff) throw new Error('grinding nonce must be a u32');
+  if (!Number.isSafeInteger(nonce) || nonce < 0 || nonce > 0xffffffff)
+    throw new Error('grinding nonce must be a u32');
   const bytes = new Uint8Array(4);
   new DataView(bytes.buffer).setUint32(0, nonce, true);
   return bytes;
@@ -39,7 +40,11 @@ export function validateGrindingBits(bits: number): void {
   }
 }
 
-export async function verifyGrindingNonce(challenge: Uint8Array, bits: number, nonce: number): Promise<boolean> {
+export async function verifyGrindingNonce(
+  challenge: Uint8Array,
+  bits: number,
+  nonce: number,
+): Promise<boolean> {
   validateGrindingBits(bits);
   return bits === 0 || leadingZeroBits(await hash(challenge, nonce)) >= bits;
 }

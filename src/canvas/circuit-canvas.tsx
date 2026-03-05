@@ -42,7 +42,8 @@ const COPY_CLASS_COLORS = [
 
 function copyClassColor(sourceId: string): string {
   let hash = 0;
-  for (let index = 0; index < sourceId.length; index++) hash = (hash * 31 + sourceId.charCodeAt(index)) >>> 0;
+  for (let index = 0; index < sourceId.length; index++)
+    hash = (hash * 31 + sourceId.charCodeAt(index)) >>> 0;
   return COPY_CLASS_COLORS[hash % COPY_CLASS_COLORS.length]!;
 }
 
@@ -82,13 +83,17 @@ function fromCircuit(circuit: Circuit): { nodes: GateNode[]; edges: Edge[] } {
       position: gate.pos ?? { x: 80 + gate.id * 24, y: 100 + (gate.id % 5) * 96 },
       data: { op: gate.op, value: gate.value?.toString() },
     })),
-    edges: circuit.gates.flatMap((gate) => gate.inputs.map((input, inputIndex) => styleCopyEdge({
-      id: `${input}-${gate.id}-${inputIndex}`,
-      source: String(input),
-      target: String(gate.id),
-      targetHandle: `input-${inputIndex}`,
-      animated: false,
-    }))),
+    edges: circuit.gates.flatMap((gate) =>
+      gate.inputs.map((input, inputIndex) =>
+        styleCopyEdge({
+          id: `${input}-${gate.id}-${inputIndex}`,
+          source: String(input),
+          target: String(gate.id),
+          targetHandle: `input-${inputIndex}`,
+          animated: false,
+        }),
+      ),
+    ),
   };
 }
 
@@ -109,7 +114,9 @@ function GateCard({ data, selected }: NodeProps<GateNode>) {
       <strong>{labels[data.op]}</strong>
       {data.op === 'const' && <small>value {data.value ?? '0'}</small>}
       {(data.op === 'assert0' || data.op === 'lookup') && <small>terminal statement</small>}
-      {data.op !== 'assert0' && data.op !== 'lookup' && <Handle id="output" type="source" position={Position.Right} />}
+      {data.op !== 'assert0' && data.op !== 'lookup' && (
+        <Handle id="output" type="source" position={Position.Right} />
+      )}
     </div>
   );
 }
@@ -129,7 +136,8 @@ function canvasCircuit(nodes: GateNode[], edges: Edge[], template: Circuit): Cir
     if (input === null) continue;
     const inputIndex = Number(input[1]);
     const byInput = edgeByTarget.get(edge.target) ?? new Map<number, Edge>();
-    if (byInput.has(inputIndex)) throw new Error(`Gate ${edge.target} has two wires connected to input ${inputIndex + 1}`);
+    if (byInput.has(inputIndex))
+      throw new Error(`Gate ${edge.target} has two wires connected to input ${inputIndex + 1}`);
     byInput.set(inputIndex, edge);
     edgeByTarget.set(edge.target, byInput);
   }
@@ -137,7 +145,8 @@ function canvasCircuit(nodes: GateNode[], edges: Edge[], template: Circuit): Cir
     const expectedInputs = arity[node.data.op];
     const inputs = Array.from({ length: expectedInputs }, (_, input) => {
       const edge = edgeByTarget.get(node.id)?.get(input);
-      if (edge === undefined) throw new Error(`${labels[node.data.op]} gate ${node.id} is missing input ${input + 1}`);
+      if (edge === undefined)
+        throw new Error(`${labels[node.data.op]} gate ${node.id} is missing input ${input + 1}`);
       return parseGateId(edge.source);
     });
     let value: bigint | undefined;
@@ -145,7 +154,9 @@ function canvasCircuit(nodes: GateNode[], edges: Edge[], template: Circuit): Cir
       try {
         value = BigInt(node.data.value ?? '0');
       } catch {
-        throw new Error(`${node.data.op === 'const' ? 'Constant' : 'Lookup tag'} gate ${node.id} needs an integer value`);
+        throw new Error(
+          `${node.data.op === 'const' ? 'Constant' : 'Lookup tag'} gate ${node.id} needs an integer value`,
+        );
       }
     }
     return {
@@ -160,13 +171,17 @@ function canvasCircuit(nodes: GateNode[], edges: Edge[], template: Circuit): Cir
     name: 'Canvas circuit',
     gates,
     publicOrder: nodes.filter((node) => node.data.op === 'pub').map((node) => parseGateId(node.id)),
-    ...(nodes.some((node) => node.data.op === 'lookup') ? template.lookupTable === undefined
-      ? { lookupTable: Array.from({ length: 16 }, (_, value) => BigInt(value)) }
-      : {
-        lookupTable: template.lookupTable.slice(),
-        ...(template.lookupMode === undefined ? {} : { lookupMode: template.lookupMode }),
-        ...(template.lookupTableTags === undefined ? {} : { lookupTableTags: template.lookupTableTags.slice() }),
-      } : {}),
+    ...(nodes.some((node) => node.data.op === 'lookup')
+      ? template.lookupTable === undefined
+        ? { lookupTable: Array.from({ length: 16 }, (_, value) => BigInt(value)) }
+        : {
+            lookupTable: template.lookupTable.slice(),
+            ...(template.lookupMode === undefined ? {} : { lookupMode: template.lookupMode }),
+            ...(template.lookupTableTags === undefined
+              ? {}
+              : { lookupTableTags: template.lookupTableTags.slice() }),
+          }
+      : {}),
   };
 }
 
@@ -180,7 +195,9 @@ export function CircuitCanvas({ circuit = pythagorean, onUseCircuit }: CircuitCa
   const [nodes, setNodes, onNodesChange] = useNodesState<GateNode>(initial.nodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>(initial.edges);
   const [selectedId, setSelectedId] = useState<string>();
-  const [compileStatus, setCompileStatus] = useState<string>('Pythagorean preset loaded. You can move gates, reconnect wires, or start empty.');
+  const [compileStatus, setCompileStatus] = useState<string>(
+    'Pythagorean preset loaded. You can move gates, reconnect wires, or start empty.',
+  );
 
   useEffect(() => {
     const next = fromCircuit(circuit);
@@ -190,31 +207,50 @@ export function CircuitCanvas({ circuit = pythagorean, onUseCircuit }: CircuitCa
     setCompileStatus(`${circuit.name} loaded on the canvas.`);
   }, [circuit, setEdges, setNodes]);
 
-  const addGate = useCallback((op: GateOp) => {
-    setNodes((current) => {
-      const highestId = current.reduce((highest, node) => Math.max(highest, parseGateId(node.id)), 0);
-      const id = String(highestId + 1);
-      const gate: GateNode = {
-        id,
-        type: 'gate',
-        position: { x: 120 + (current.length % 4) * 180, y: 90 + (current.length % 5) * 110 },
-        data: { op, value: op === 'const' || op === 'lookup' ? '0' : undefined },
-      };
-      setSelectedId(id);
-      return [...current, gate];
-    });
-  }, [setNodes]);
+  const addGate = useCallback(
+    (op: GateOp) => {
+      setNodes((current) => {
+        const highestId = current.reduce(
+          (highest, node) => Math.max(highest, parseGateId(node.id)),
+          0,
+        );
+        const id = String(highestId + 1);
+        const gate: GateNode = {
+          id,
+          type: 'gate',
+          position: { x: 120 + (current.length % 4) * 180, y: 90 + (current.length % 5) * 110 },
+          data: { op, value: op === 'const' || op === 'lookup' ? '0' : undefined },
+        };
+        setSelectedId(id);
+        return [...current, gate];
+      });
+    },
+    [setNodes],
+  );
 
-  const onConnect = useCallback((connection: Connection) => {
-    if (connection.source === null || connection.target === null || connection.targetHandle === null) return;
-    setEdges((current) => addEdge(styleCopyEdge({
-      ...connection,
-      id: `${connection.source}-${connection.target}-${connection.targetHandle}`,
-      source: connection.source,
-      target: connection.target,
-      targetHandle: connection.targetHandle,
-    }), current));
-  }, [setEdges]);
+  const onConnect = useCallback(
+    (connection: Connection) => {
+      if (
+        connection.source === null ||
+        connection.target === null ||
+        connection.targetHandle === null
+      )
+        return;
+      setEdges((current) =>
+        addEdge(
+          styleCopyEdge({
+            ...connection,
+            id: `${connection.source}-${connection.target}-${connection.targetHandle}`,
+            source: connection.source,
+            target: connection.target,
+            targetHandle: connection.targetHandle,
+          }),
+          current,
+        ),
+      );
+    },
+    [setEdges],
+  );
 
   const coloredEdges = useMemo(() => edges.map(styleCopyEdge), [edges]);
   const selected = nodes.find((node) => node.id === selectedId);
@@ -224,29 +260,47 @@ export function CircuitCanvas({ circuit = pythagorean, onUseCircuit }: CircuitCa
     try {
       const nextCircuit = canvasCircuit(nodes, edges, circuit);
       const compiled = await compile(nextCircuit);
-      setCompileStatus(`Compiled ${compiled.rows.length} PLONK rows (n = ${compiled.n}); circuit digest is bound into the proof transcript.`);
+      setCompileStatus(
+        `Compiled ${compiled.rows.length} PLONK rows (n = ${compiled.n}); circuit digest is bound into the proof transcript.`,
+      );
       onUseCircuit?.(nextCircuit);
     } catch (caught) {
-      setCompileStatus(caught instanceof Error ? caught.message : 'The canvas could not be compiled.');
+      setCompileStatus(
+        caught instanceof Error ? caught.message : 'The canvas could not be compiled.',
+      );
     }
   }, [circuit, edges, nodes, onUseCircuit]);
 
-  const reset = useCallback((preset: boolean) => {
-    const next = preset ? fromCircuit(pythagorean) : { nodes: [] as GateNode[], edges: [] as Edge[] };
-    setNodes(next.nodes);
-    setEdges(next.edges);
-    setSelectedId(undefined);
-    setCompileStatus(preset ? 'Pythagorean preset reloaded.' : 'Empty canvas. Add gates from the palette, then connect each input handle.');
-  }, [setEdges, setNodes]);
+  const reset = useCallback(
+    (preset: boolean) => {
+      const next = preset
+        ? fromCircuit(pythagorean)
+        : { nodes: [] as GateNode[], edges: [] as Edge[] };
+      setNodes(next.nodes);
+      setEdges(next.edges);
+      setSelectedId(undefined);
+      setCompileStatus(
+        preset
+          ? 'Pythagorean preset reloaded.'
+          : 'Empty canvas. Add gates from the palette, then connect each input handle.',
+      );
+    },
+    [setEdges, setNodes],
+  );
 
-  const updateConstant = useCallback((value: string) => {
-    if (selectedConst === undefined) return;
-    setNodes((current) => current.map((node) => node.id === selectedConst.id
-      ? { ...node, data: { ...node.data, value } }
-      : node));
-  }, [selectedConst, setNodes]);
+  const updateConstant = useCallback(
+    (value: string) => {
+      if (selectedConst === undefined) return;
+      setNodes((current) =>
+        current.map((node) =>
+          node.id === selectedConst.id ? { ...node, data: { ...node.data, value } } : node,
+        ),
+      );
+    },
+    [selectedConst, setNodes],
+  );
 
-  const palette = useMemo(() => (Object.keys(labels) as GateOp[]), []);
+  const palette = useMemo(() => Object.keys(labels) as GateOp[], []);
   return (
     <section className="circuit-workbench" aria-labelledby="canvas-title">
       <div className="canvas-heading">
@@ -254,15 +308,21 @@ export function CircuitCanvas({ circuit = pythagorean, onUseCircuit }: CircuitCa
           <p className="eyebrow">M6 circuit workbench</p>
           <h2 id="canvas-title">Build the claim before proving it</h2>
           <p>
-            Every wire is a copy-constraint class — matching edge colours mark the same source
-            wire. Connect a gate&apos;s output to an input handle, then compile the visible graph
-            into deterministic PLONK rows.
+            Every wire is a copy-constraint class — matching edge colours mark the same source wire.
+            Connect a gate&apos;s output to an input handle, then compile the visible graph into
+            deterministic PLONK rows.
           </p>
         </div>
         <div className="canvas-actions">
-          <button type="button" onClick={compileCanvas}>Compile Canvas</button>
-          <button type="button" onClick={() => reset(true)}>Load Pythagorean</button>
-          <button type="button" onClick={() => reset(false)}>Start Empty</button>
+          <button type="button" onClick={compileCanvas}>
+            Compile Canvas
+          </button>
+          <button type="button" onClick={() => reset(true)}>
+            Load Pythagorean
+          </button>
+          <button type="button" onClick={() => reset(false)}>
+            Start Empty
+          </button>
         </div>
       </div>
       <div className="canvas-layout">
@@ -276,7 +336,11 @@ export function CircuitCanvas({ circuit = pythagorean, onUseCircuit }: CircuitCa
           {selectedConst !== undefined && (
             <label className="constant-editor">
               Constant value
-              <input value={selectedConst.data.value ?? '0'} onChange={(event) => updateConstant(event.target.value)} inputMode="numeric" />
+              <input
+                value={selectedConst.data.value ?? '0'}
+                onChange={(event) => updateConstant(event.target.value)}
+                inputMode="numeric"
+              />
             </label>
           )}
         </aside>
@@ -300,7 +364,9 @@ export function CircuitCanvas({ circuit = pythagorean, onUseCircuit }: CircuitCa
           </ReactFlow>
         </div>
       </div>
-      <p className={compileStatus.startsWith('Compiled') ? 'pass canvas-status' : 'canvas-status'}>{compileStatus}</p>
+      <p className={compileStatus.startsWith('Compiled') ? 'pass canvas-status' : 'canvas-status'}>
+        {compileStatus}
+      </p>
     </section>
   );
 }

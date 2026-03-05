@@ -15,16 +15,19 @@ async function sha256(bytes: Uint8Array): Promise<Uint8Array> {
 
 /** c₀ = 0; cᵢ = SHA-256("witness/mimc/i")[0..8] interpreted big-endian, mod p. */
 export function mimcConstant(round: number): Promise<Fp> {
-  if (!Number.isInteger(round) || round < 0 || round >= 32) throw new Error(`invalid MiMC round ${round}`);
+  if (!Number.isInteger(round) || round < 0 || round >= 32)
+    throw new Error(`invalid MiMC round ${round}`);
   const existing = constants.get(round);
   if (existing !== undefined) return existing;
-  const value = round === 0
-    ? Promise.resolve(0n)
-    : sha256(encoder.encode(`witness/mimc/${round}`)).then((digest) => {
-      let firstEightBytes = 0n;
-      for (let i = 0; i < 8; i++) firstEightBytes = (firstEightBytes << 8n) | BigInt(digest[i]!);
-      return mod(firstEightBytes);
-    });
+  const value =
+    round === 0
+      ? Promise.resolve(0n)
+      : sha256(encoder.encode(`witness/mimc/${round}`)).then((digest) => {
+          let firstEightBytes = 0n;
+          for (let i = 0; i < 8; i++)
+            firstEightBytes = (firstEightBytes << 8n) | BigInt(digest[i]!);
+          return mod(firstEightBytes);
+        });
   constants.set(round, value);
   return value;
 }

@@ -11,7 +11,13 @@ export interface WorkerProofResult {
 
 type WorkerRequestBody =
   | { action: 'prove'; circuit: Circuit; inputs: [number, string][]; params: Params; seed: number }
-  | { action: 'grind'; circuit: Circuit; inputs: [number, string][]; weakQueries: number; maxAttempts: number };
+  | {
+      action: 'grind';
+      circuit: Circuit;
+      inputs: [number, string][];
+      weakQueries: number;
+      maxAttempts: number;
+    };
 
 function requestWorker<T extends WorkerResponse['kind']>(
   request: WorkerRequestBody,
@@ -52,7 +58,17 @@ export async function proveInWorker(
   seed: number,
   onProgress?: (stage: string) => void,
 ): Promise<WorkerProofResult> {
-  return requestWorker({ action: 'prove', circuit, inputs: [...inputs].map(([wire, value]) => [wire, value.toString()]), params, seed }, 'proof', onProgress);
+  return requestWorker(
+    {
+      action: 'prove',
+      circuit,
+      inputs: [...inputs].map(([wire, value]) => [wire, value.toString()]),
+      params,
+      seed,
+    },
+    'proof',
+    onProgress,
+  );
 }
 
 export async function grindInWorker(
@@ -62,5 +78,15 @@ export async function grindInWorker(
   maxAttempts: number,
   onProgress?: (stage: string) => void,
 ): Promise<{ attempts: number; succeeded: boolean }> {
-  return requestWorker({ action: 'grind', circuit, inputs: [...inputs].map(([wire, value]) => [wire, value.toString()]), weakQueries, maxAttempts }, 'grind', onProgress);
+  return requestWorker(
+    {
+      action: 'grind',
+      circuit,
+      inputs: [...inputs].map(([wire, value]) => [wire, value.toString()]),
+      weakQueries,
+      maxAttempts,
+    },
+    'grind',
+    onProgress,
+  );
 }

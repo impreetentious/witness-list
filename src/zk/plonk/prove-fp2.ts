@@ -3,7 +3,13 @@ import type { Fp } from '../field';
 import { mul as mulBase, twoAdicRoot } from '../field';
 import type { Fp2 } from '../fp2';
 import { embed, fp2, isZero, mul } from '../fp2';
-import { cosetEvaluateFp2, evalBaseAtFp2, evalFp2, interpolateFp2, type Fp2Poly } from '../fp2-poly';
+import {
+  cosetEvaluateFp2,
+  evalBaseAtFp2,
+  evalFp2,
+  interpolateFp2,
+  type Fp2Poly,
+} from '../fp2-poly';
 import type { CompiledCircuit, Witness } from '../circuit/compile';
 import { cosetEvaluate, interpolate } from '../ntt';
 import type { Poly } from '../poly';
@@ -54,7 +60,9 @@ function paramsBytes(params: Params): Uint8Array {
   const grindingBits = params.grindingBits ?? 0;
   const bytes = new Uint8Array(grindingBits === 0 ? 13 : 14);
   const view = new DataView(bytes.buffer);
-  view.setUint32(0, params.n, true); view.setUint32(4, params.blowup, true); view.setUint32(8, params.queries, true);
+  view.setUint32(0, params.n, true);
+  view.setUint32(4, params.blowup, true);
+  view.setUint32(8, params.queries, true);
   bytes[12] = params.zk ? 1 : 0;
   if (grindingBits > 0) bytes[13] = grindingBits;
   return bytes;
@@ -65,7 +73,10 @@ function padded(poly: Fp2Poly, n: number): Fp2Poly {
   return [...poly, ...Array.from({ length: n - poly.length }, () => fp2(0n, 0n))];
 }
 
-async function squeezeZeta(transcript: ReturnType<typeof createTranscript>, params: Params): Promise<Fp2> {
+async function squeezeZeta(
+  transcript: ReturnType<typeof createTranscript>,
+  params: Params,
+): Promise<Fp2> {
   const domainSize = BigInt(params.n * params.blowup);
   for (;;) {
     const zeta = await transcript.squeezeFp2('zeta');
@@ -90,7 +101,8 @@ export async function proveFp2(
   seed: number,
   forcePastRemainder: boolean,
 ): Promise<ProofTrace> {
-  if (params.n !== circuit.n || params.blowup < 1 || (params.blowup & (params.blowup - 1)) !== 0) throw new Error('proof parameters do not match compiled circuit');
+  if (params.n !== circuit.n || params.blowup < 1 || (params.blowup & (params.blowup - 1)) !== 0)
+    throw new Error('proof parameters do not match compiled circuit');
   const transcript = createTranscript('witness-list/plonk-v2/fp2-plookup');
   await transcript.absorb('params', paramsBytes(params));
   await transcript.absorb('circuit-digest', circuit.digest);
@@ -111,7 +123,10 @@ export async function proveFp2(
   if (lookupWitness?.mode === 'membership') {
     h1 = blind(interpolate(lookupWitness.h1!), circuit.n, params, random);
     h2 = blind(interpolate(lookupWitness.h2!), circuit.n, params, random);
-    [h1Commitment, h2Commitment] = await Promise.all([commitBase(h1, size, 'lookup-h1'), commitBase(h2, size, 'lookup-h2')]);
+    [h1Commitment, h2Commitment] = await Promise.all([
+      commitBase(h1, size, 'lookup-h1'),
+      commitBase(h2, size, 'lookup-h2'),
+    ]);
     await transcript.absorb('lookup-h1-root', h1Commitment.tree.root.bytes);
     await transcript.absorb('lookup-h2-root', h2Commitment.tree.root.bytes);
   }
@@ -123,113 +138,232 @@ export async function proveFp2(
   const z = await commitFp2(zPoly, size, 'z2');
   await transcript.absorb('z-root', z.tree.root.bytes);
 
-  const lookupGrand = lookupWitness === undefined ? undefined : buildLookupGrandProduct(lookupWitness, beta, gamma);
-  const lookupZPoly = lookupGrand === undefined ? undefined : blindFp2(interpolateFp2(lookupGrand.z), circuit.n, params, random);
-  const lookupZ = lookupZPoly === undefined ? undefined : await commitFp2(lookupZPoly, size, 'lookup-z2');
+  const lookupGrand =
+    lookupWitness === undefined ? undefined : buildLookupGrandProduct(lookupWitness, beta, gamma);
+  const lookupZPoly =
+    lookupGrand === undefined
+      ? undefined
+      : blindFp2(interpolateFp2(lookupGrand.z), circuit.n, params, random);
+  const lookupZ =
+    lookupZPoly === undefined ? undefined : await commitFp2(lookupZPoly, size, 'lookup-z2');
   if (lookupZ !== undefined) await transcript.absorb('lookup-z-root', lookupZ.tree.root.bytes);
 
   const alpha = await transcript.squeezeFp2('alpha');
   const composition = composeConstraintsFp2(circuit, witness, publicInputs, beta, gamma, alpha, {
-    a, b, c, z: zPoly,
-    ...(lookupWitness === undefined ? {} : { lookup: { witness: lookupWitness, ...(h1 === undefined ? {} : { h1, h2: h2! }), z: lookupZPoly! } }),
+    a,
+    b,
+    c,
+    z: zPoly,
+    ...(lookupWitness === undefined
+      ? {}
+      : {
+          lookup: {
+            witness: lookupWitness,
+            ...(h1 === undefined ? {} : { h1, h2: h2! }),
+            z: lookupZPoly!,
+          },
+        }),
   });
   const quotient = buildQuotientFp2(composition.composed, circuit.n, quotientChunkCount(params));
   if (!quotient.exact && !forcePastRemainder) {
-    const rows = quotient.remainderOnH.flatMap((value, row) => isZero(value) ? [] : [row]);
+    const rows = quotient.remainderOnH.flatMap((value, row) => (isZero(value) ? [] : [row]));
     throw new Error(`constraint composition has nonzero Fp² remainder on rows ${rows.join(', ')}`);
   }
-  const t = await Promise.all(quotient.chunks.map((chunk, index) => commitFp2(padded(chunk, circuit.n), size, quotientChunkLabel(index))));
+  const t = await Promise.all(
+    quotient.chunks.map((chunk, index) =>
+      commitFp2(padded(chunk, circuit.n), size, quotientChunkLabel(index)),
+    ),
+  );
   for (const commitment of t) await transcript.absorb('t-root', commitment.tree.root.bytes);
 
   const zeta = await squeezeZeta(transcript, params);
   const omegaZeta = mul(zeta, embed(twoAdicRoot(Math.log2(circuit.n))));
   const [sA, sB, sC] = sigmaPolynomials(circuit);
   const openingPairs: Array<[string, Fp2]> = [
-    ['a', evalBaseAtFp2(a, zeta)], ['b', evalBaseAtFp2(b, zeta)], ['c', evalBaseAtFp2(c, zeta)],
-    ['s-a', evalBaseAtFp2(sA, zeta)], ['s-b', evalBaseAtFp2(sB, zeta)], ['s-c', evalBaseAtFp2(sC, zeta)],
-    ['z', evalFp2(zPoly, zeta)], ['z-omega', evalFp2(zPoly, omegaZeta)],
-    ...quotient.chunks.map((chunk, index) => [quotientChunkLabel(index), evalFp2(chunk, zeta)] as [string, Fp2]),
+    ['a', evalBaseAtFp2(a, zeta)],
+    ['b', evalBaseAtFp2(b, zeta)],
+    ['c', evalBaseAtFp2(c, zeta)],
+    ['s-a', evalBaseAtFp2(sA, zeta)],
+    ['s-b', evalBaseAtFp2(sB, zeta)],
+    ['s-c', evalBaseAtFp2(sC, zeta)],
+    ['z', evalFp2(zPoly, zeta)],
+    ['z-omega', evalFp2(zPoly, omegaZeta)],
+    ...quotient.chunks.map(
+      (chunk, index) => [quotientChunkLabel(index), evalFp2(chunk, zeta)] as [string, Fp2],
+    ),
   ];
-  if (lookupWitness?.mode === 'membership') openingPairs.push(
-    ['lookup-h1', evalBaseAtFp2(h1!, zeta)], ['lookup-h1-omega', evalBaseAtFp2(h1!, omegaZeta)],
-    ['lookup-h2', evalBaseAtFp2(h2!, zeta)], ['lookup-h2-omega', evalBaseAtFp2(h2!, omegaZeta)],
-  );
-  if (lookupWitness !== undefined) openingPairs.push(['lookup-z', evalFp2(lookupZPoly!, zeta)], ['lookup-z-omega', evalFp2(lookupZPoly!, omegaZeta)]);
+  if (lookupWitness?.mode === 'membership')
+    openingPairs.push(
+      ['lookup-h1', evalBaseAtFp2(h1!, zeta)],
+      ['lookup-h1-omega', evalBaseAtFp2(h1!, omegaZeta)],
+      ['lookup-h2', evalBaseAtFp2(h2!, zeta)],
+      ['lookup-h2-omega', evalBaseAtFp2(h2!, omegaZeta)],
+    );
+  if (lookupWitness !== undefined)
+    openingPairs.push(
+      ['lookup-z', evalFp2(lookupZPoly!, zeta)],
+      ['lookup-z-omega', evalFp2(lookupZPoly!, omegaZeta)],
+    );
   const openings = openingPairs.map(([label, value]) => ({ label, value }));
-  for (const opening of openings) await transcript.absorbFp2(`opening-${opening.label}`, opening.value);
+  for (const opening of openings)
+    await transcript.absorbFp2(`opening-${opening.label}`, opening.value);
   const rho = await transcript.squeezeFp2('rho');
   const claimMap = new Map(openingPairs);
-  const baseClaimLabels = ['a', 'b', 'c', 'z', 'z-omega', ...quotient.chunks.map((_, index) => quotientChunkLabel(index))];
-  const lookupClaimLabels = lookupWitness === undefined ? [] : [
-    ...(lookupWitness.mode === 'membership' ? ['lookup-h1', 'lookup-h1-omega', 'lookup-h2', 'lookup-h2-omega'] : []),
-    'lookup-z', 'lookup-z-omega',
+  const baseClaimLabels = [
+    'a',
+    'b',
+    'c',
+    'z',
+    'z-omega',
+    ...quotient.chunks.map((_, index) => quotientChunkLabel(index)),
   ];
+  const lookupClaimLabels =
+    lookupWitness === undefined
+      ? []
+      : [
+          ...(lookupWitness.mode === 'membership'
+            ? ['lookup-h1', 'lookup-h1-omega', 'lookup-h2', 'lookup-h2-omega']
+            : []),
+          'lookup-z',
+          'lookup-z-omega',
+        ];
   const claimed = [...baseClaimLabels, ...lookupClaimLabels].map((label) => claimMap.get(label)!);
   const deepValues = Array.from({ length: size }, () => fp2(0n, 0n));
   for (let index = 0; index < size; index++) {
     const rotated = (index + params.blowup) % size;
     const values = [
-      ...wires.evaluations[index]!.map(embed), z.values[index]!, z.values[rotated]!, ...t.map((commitment) => commitment.values[index]!),
+      ...wires.evaluations[index]!.map(embed),
+      z.values[index]!,
+      z.values[rotated]!,
+      ...t.map((commitment) => commitment.values[index]!),
     ];
-    if (lookupWitness?.mode === 'membership') values.push(
-      embed(h1Commitment!.evaluations[index]![0]!), embed(h1Commitment!.evaluations[rotated]![0]!),
-      embed(h2Commitment!.evaluations[index]![0]!), embed(h2Commitment!.evaluations[rotated]![0]!),
-    );
-    if (lookupWitness !== undefined) values.push(lookupZ!.values[index]!, lookupZ!.values[rotated]!);
+    if (lookupWitness?.mode === 'membership')
+      values.push(
+        embed(h1Commitment!.evaluations[index]![0]!),
+        embed(h1Commitment!.evaluations[rotated]![0]!),
+        embed(h2Commitment!.evaluations[index]![0]!),
+        embed(h2Commitment!.evaluations[rotated]![0]!),
+      );
+    if (lookupWitness !== undefined)
+      values.push(lookupZ!.values[index]!, lookupZ!.values[rotated]!);
     deepValues[index] = deepCompositionAtFp2(domainPoint(index, size), zeta, rho, values, claimed);
   }
-  const fri = await buildFriFp2(deepValues, friInitialDegreeBound(params), transcript, params.queries, params.grindingBits ?? 0);
+  const fri = await buildFriFp2(
+    deepValues,
+    friInitialDegreeBound(params),
+    transcript,
+    params.queries,
+    params.grindingBits ?? 0,
+  );
   const queries = fri.queries.map((query) => {
     const index = query.index;
     const rotated = (index + params.blowup) % size;
     return {
       ...query,
       leaves: {
-        wires: wires.evaluations[index]!.slice(), z: z.evaluations[index]!.slice(), 'z-omega': z.evaluations[rotated]!.slice(),
-        ...Object.fromEntries(t.map((commitment, chunk) => [quotientChunkLabel(chunk), commitment.evaluations[index]!.slice()])),
-        ...(lookupWitness?.mode !== 'membership' ? {} : {
-          'lookup-h1': h1Commitment!.evaluations[index]!.slice(), 'lookup-h1-omega': h1Commitment!.evaluations[rotated]!.slice(),
-          'lookup-h2': h2Commitment!.evaluations[index]!.slice(), 'lookup-h2-omega': h2Commitment!.evaluations[rotated]!.slice(),
-        }),
-        ...(lookupWitness === undefined ? {} : {
-          'lookup-z': lookupZ!.evaluations[index]!.slice(), 'lookup-z-omega': lookupZ!.evaluations[rotated]!.slice(),
-        }),
+        wires: wires.evaluations[index]!.slice(),
+        z: z.evaluations[index]!.slice(),
+        'z-omega': z.evaluations[rotated]!.slice(),
+        ...Object.fromEntries(
+          t.map((commitment, chunk) => [
+            quotientChunkLabel(chunk),
+            commitment.evaluations[index]!.slice(),
+          ]),
+        ),
+        ...(lookupWitness?.mode !== 'membership'
+          ? {}
+          : {
+              'lookup-h1': h1Commitment!.evaluations[index]!.slice(),
+              'lookup-h1-omega': h1Commitment!.evaluations[rotated]!.slice(),
+              'lookup-h2': h2Commitment!.evaluations[index]!.slice(),
+              'lookup-h2-omega': h2Commitment!.evaluations[rotated]!.slice(),
+            }),
+        ...(lookupWitness === undefined
+          ? {}
+          : {
+              'lookup-z': lookupZ!.evaluations[index]!.slice(),
+              'lookup-z-omega': lookupZ!.evaluations[rotated]!.slice(),
+            }),
       },
       paths: {
-        wires: wires.tree.path(index), z: z.tree.path(index), 'z-omega': z.tree.path(rotated),
-        ...Object.fromEntries(t.map((commitment, chunk) => [quotientChunkLabel(chunk), commitment.tree.path(index)])),
-        ...(lookupWitness?.mode !== 'membership' ? {} : {
-          'lookup-h1': h1Commitment!.tree.path(index), 'lookup-h1-omega': h1Commitment!.tree.path(rotated),
-          'lookup-h2': h2Commitment!.tree.path(index), 'lookup-h2-omega': h2Commitment!.tree.path(rotated),
-        }),
-        ...(lookupWitness === undefined ? {} : {
-          'lookup-z': lookupZ!.tree.path(index), 'lookup-z-omega': lookupZ!.tree.path(rotated),
-        }),
+        wires: wires.tree.path(index),
+        z: z.tree.path(index),
+        'z-omega': z.tree.path(rotated),
+        ...Object.fromEntries(
+          t.map((commitment, chunk) => [quotientChunkLabel(chunk), commitment.tree.path(index)]),
+        ),
+        ...(lookupWitness?.mode !== 'membership'
+          ? {}
+          : {
+              'lookup-h1': h1Commitment!.tree.path(index),
+              'lookup-h1-omega': h1Commitment!.tree.path(rotated),
+              'lookup-h2': h2Commitment!.tree.path(index),
+              'lookup-h2-omega': h2Commitment!.tree.path(rotated),
+            }),
+        ...(lookupWitness === undefined
+          ? {}
+          : {
+              'lookup-z': lookupZ!.tree.path(index),
+              'lookup-z-omega': lookupZ!.tree.path(rotated),
+            }),
       },
     };
   });
   const proof: Proof = {
-    version: 2, params, circuitDigest: circuit.digest.slice(), publicInputs: publicInputs.slice(),
-    wiresRoot: wires.tree.root, zRoot: z.tree.root, tRoots: t.map((commitment) => commitment.tree.root),
-    ...(lookupWitness === undefined ? {} : { lookupRoots: {
-      mode: lookupWitness.mode,
-      ...(lookupWitness.mode === 'membership' ? { h1Root: h1Commitment!.tree.root, h2Root: h2Commitment!.tree.root } : {}),
-      zRoot: lookupZ!.tree.root,
-    } }),
-    openings, friLayerRoots: fri.roots, friFinalCoeffs: fri.finalCoeffs,
-    ...(fri.grindingNonce === undefined ? {} : { grindingNonce: fri.grindingNonce }), queries,
+    version: 2,
+    params,
+    circuitDigest: circuit.digest.slice(),
+    publicInputs: publicInputs.slice(),
+    wiresRoot: wires.tree.root,
+    zRoot: z.tree.root,
+    tRoots: t.map((commitment) => commitment.tree.root),
+    ...(lookupWitness === undefined
+      ? {}
+      : {
+          lookupRoots: {
+            mode: lookupWitness.mode,
+            ...(lookupWitness.mode === 'membership'
+              ? { h1Root: h1Commitment!.tree.root, h2Root: h2Commitment!.tree.root }
+              : {}),
+            zRoot: lookupZ!.tree.root,
+          },
+        }),
+    openings,
+    friLayerRoots: fri.roots,
+    friFinalCoeffs: fri.finalCoeffs,
+    ...(fri.grindingNonce === undefined ? {} : { grindingNonce: fri.grindingNonce }),
+    queries,
   };
   return {
     proof,
     transcript: transcript.log,
     stages: {
-      milestone: forcePastRemainder ? 'Attack A1 — forced past a nonzero Fp² quotient remainder; V2 must reject' : 'Protocol v2 — Fp² PLONK/DEEP/FRI with bound Plookup',
-      seed, beta, gamma, alpha, zeta, rho,
+      milestone: forcePastRemainder
+        ? 'Attack A1 — forced past a nonzero Fp² quotient remainder; V2 must reject'
+        : 'Protocol v2 — Fp² PLONK/DEEP/FRI with bound Plookup',
+      seed,
+      beta,
+      gamma,
+      alpha,
+      zeta,
+      rho,
       witness: { a: witness.a.slice(), b: witness.b.slice(), c: witness.c.slice() },
       wirePolynomials: { a: a.slice(), b: b.slice(), c: c.slice() },
       grandProduct: { values: copyGrand.z, partials: copyGrand.partials },
-      ...(lookupGrand === undefined ? {} : { lookupGrandProduct: { mode: lookupWitness!.mode, partials: lookupGrand.partials, h1: lookupWitness!.h1, h2: lookupWitness!.h2 } }),
-      quotient: { chunks: quotient.chunks }, selectors: selectorPolynomials(circuit), composedOnH: composition.composedOnH, friLayers: fri.roots.length,
+      ...(lookupGrand === undefined
+        ? {}
+        : {
+            lookupGrandProduct: {
+              mode: lookupWitness!.mode,
+              partials: lookupGrand.partials,
+              h1: lookupWitness!.h1,
+              h2: lookupWitness!.h2,
+            },
+          }),
+      quotient: { chunks: quotient.chunks },
+      selectors: selectorPolynomials(circuit),
+      composedOnH: composition.composedOnH,
+      friLayers: fri.roots.length,
     },
     quotientRemainder: quotient.remainderOnH,
   };

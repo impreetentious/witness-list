@@ -38,12 +38,8 @@ function transform(input: Fp[], root: Fp): Fp[] {
       for (let offset = 0; offset < half; offset++) {
         const left = a[start + offset]!;
         const right = mul(a[start + offset + half]!, twiddle);
-        a[start + offset] = left + right >= P
-          ? left + right - P
-          : left + right;
-        a[start + offset + half] = left >= right
-          ? left - right
-          : left - right + P;
+        a[start + offset] = left + right >= P ? left + right - P : left + right;
+        a[start + offset + half] = left >= right ? left - right : left - right + P;
         twiddle = mul(twiddle, step);
       }
     }
@@ -67,7 +63,8 @@ export function intt(a: Fp[]): Fp[] {
 /** Evaluate coefficients on a chosen power-of-two coset domain. */
 export function cosetEvaluate(coeffs: Fp[], domainSize: number): Fp[] {
   log2PowerOfTwo(domainSize, 'coset evaluation domain');
-  if (coeffs.length > domainSize) throw new Error('coset evaluation domain is smaller than the polynomial');
+  if (coeffs.length > domainSize)
+    throw new Error('coset evaluation domain is smaller than the polynomial');
 
   const shifted = Array.from<Fp>({ length: domainSize }).fill(0n);
   let generatorPower = 1n;

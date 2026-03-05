@@ -11,7 +11,12 @@
 import type { Circuit } from '../zk/circuit/ir';
 import { mimcConstant } from '../zk/circuit/presets/mimc';
 import { PresetBuilder } from '../zk/circuit/presets/builder';
-import { POSEIDON_FULL_ROUNDS, POSEIDON_MDS, POSEIDON_PARTIAL_ROUNDS, poseidonRoundConstants } from '../zk/poseidon';
+import {
+  POSEIDON_FULL_ROUNDS,
+  POSEIDON_MDS,
+  POSEIDON_PARTIAL_ROUNDS,
+  poseidonRoundConstants,
+} from '../zk/poseidon';
 
 type TokenKind = 'identifier' | 'number' | 'symbol' | 'eof';
 
@@ -93,7 +98,11 @@ function tokenize(source: string): Token[] {
       index++;
       continue;
     }
-    throw new WitnessScriptError(`Unexpected character ${JSON.stringify(current)}.`, index, index + 1);
+    throw new WitnessScriptError(
+      `Unexpected character ${JSON.stringify(current)}.`,
+      index,
+      index + 1,
+    );
   }
   tokens.push({ kind: 'eof', text: '', start: source.length, end: source.length });
   return tokens;
@@ -116,21 +125,33 @@ class Parser {
 
   private expect(text: string): Token {
     const token = this.current();
-    if (token.text !== text) throw new WitnessScriptError(`Expected ${JSON.stringify(text)}, found ${token.kind === 'eof' ? 'end of file' : JSON.stringify(token.text)}.`, token.start, token.end);
+    if (token.text !== text)
+      throw new WitnessScriptError(
+        `Expected ${JSON.stringify(text)}, found ${token.kind === 'eof' ? 'end of file' : JSON.stringify(token.text)}.`,
+        token.start,
+        token.end,
+      );
     return this.advance();
   }
 
   private identifier(): Token {
     const token = this.current();
-    if (token.kind !== 'identifier') throw new WitnessScriptError('Expected an identifier.', token.start, token.end);
+    if (token.kind !== 'identifier')
+      throw new WitnessScriptError('Expected an identifier.', token.start, token.end);
     return this.advance();
   }
 
   private integer(): { value: number; token: Token } {
     const token = this.current();
-    if (token.kind !== 'number') throw new WitnessScriptError('Expected a non-negative integer.', token.start, token.end);
+    if (token.kind !== 'number')
+      throw new WitnessScriptError('Expected a non-negative integer.', token.start, token.end);
     const value = Number(token.text);
-    if (!Number.isSafeInteger(value)) throw new WitnessScriptError('Integer is too large for a loop or range bound.', token.start, token.end);
+    if (!Number.isSafeInteger(value))
+      throw new WitnessScriptError(
+        'Integer is too large for a loop or range bound.',
+        token.start,
+        token.end,
+      );
     this.advance();
     return { value, token };
   }
@@ -141,14 +162,23 @@ class Parser {
     this.expect('{');
     const statements = this.statements('}');
     this.expect('}');
-    if (this.current().kind !== 'eof') throw new WitnessScriptError('Only one claim block is allowed.', this.current().start, this.current().end);
+    if (this.current().kind !== 'eof')
+      throw new WitnessScriptError(
+        'Only one claim block is allowed.',
+        this.current().start,
+        this.current().end,
+      );
     return { name: name.text, statements };
   }
 
   private statements(end: string): Statement[] {
     const statements: Statement[] = [];
     while (this.current().text !== end) {
-      if (this.current().kind === 'eof') throw new WitnessScriptError(`Expected ${JSON.stringify(end)} before end of file.`, this.current().start);
+      if (this.current().kind === 'eof')
+        throw new WitnessScriptError(
+          `Expected ${JSON.stringify(end)} before end of file.`,
+          this.current().start,
+        );
       statements.push(this.statement());
     }
     return statements;
@@ -188,7 +218,12 @@ class Parser {
       this.expect('..');
       const upper = this.integer();
       this.expect(';');
-      if (upper.value < lower.value) throw new WitnessScriptError('A range upper bound must not be smaller than its lower bound.', lower.token.start, upper.token.end);
+      if (upper.value < lower.value)
+        throw new WitnessScriptError(
+          'A range upper bound must not be smaller than its lower bound.',
+          lower.token.start,
+          upper.token.end,
+        );
       return { kind: 'range', name: name.text, lower: lower.value, upper: upper.value, token };
     }
     if (token.text === 'for') {
@@ -198,13 +233,22 @@ class Parser {
       const lower = this.integer();
       this.expect('..');
       const upper = this.integer();
-      if (upper.value < lower.value) throw new WitnessScriptError('A loop upper bound must not be smaller than its lower bound.', lower.token.start, upper.token.end);
+      if (upper.value < lower.value)
+        throw new WitnessScriptError(
+          'A loop upper bound must not be smaller than its lower bound.',
+          lower.token.start,
+          upper.token.end,
+        );
       this.expect('{');
       const body = this.statements('}');
       this.expect('}');
       return { kind: 'for', name: name.text, lower: lower.value, upper: upper.value, body, token };
     }
-    throw new WitnessScriptError(`Expected a statement, found ${JSON.stringify(token.text)}.`, token.start, token.end);
+    throw new WitnessScriptError(
+      `Expected a statement, found ${JSON.stringify(token.text)}.`,
+      token.start,
+      token.end,
+    );
   }
 
   private expression(minimum = 0): Expression {
@@ -264,7 +308,8 @@ function expressionPrecedence(expression: Expression): number {
 function printExpression(expression: Expression, parentPrecedence = 0): string {
   if (expression.kind === 'number') return expression.value.toString();
   if (expression.kind === 'name') return expression.name;
-  if (expression.kind === 'call') return `${expression.name}(${expression.args.map((argument) => printExpression(argument)).join(', ')})`;
+  if (expression.kind === 'call')
+    return `${expression.name}(${expression.args.map((argument) => printExpression(argument)).join(', ')})`;
   const precedence = expressionPrecedence(expression);
   const rendered = `${printExpression(expression.left, precedence)} ${expression.operator} ${printExpression(expression.right, precedence + (expression.operator === '-' ? 1 : 0))}`;
   return precedence < parentPrecedence ? `(${rendered})` : rendered;
@@ -273,10 +318,16 @@ function printExpression(expression: Expression, parentPrecedence = 0): string {
 function printStatements(statements: readonly Statement[], depth: number): string[] {
   const indent = '  '.repeat(depth);
   return statements.flatMap((statement): string[] => {
-    if (statement.kind === 'input') return [`${indent}${statement.visibility} ${statement.name}: field;`];
-    if (statement.kind === 'let') return [`${indent}let ${statement.name} = ${printExpression(statement.expression)};`];
-    if (statement.kind === 'assert') return [`${indent}assert ${printExpression(statement.left)} == ${printExpression(statement.right)};`];
-    if (statement.kind === 'range') return [`${indent}range ${statement.name} in ${statement.lower}..${statement.upper};`];
+    if (statement.kind === 'input')
+      return [`${indent}${statement.visibility} ${statement.name}: field;`];
+    if (statement.kind === 'let')
+      return [`${indent}let ${statement.name} = ${printExpression(statement.expression)};`];
+    if (statement.kind === 'assert')
+      return [
+        `${indent}assert ${printExpression(statement.left)} == ${printExpression(statement.right)};`,
+      ];
+    if (statement.kind === 'range')
+      return [`${indent}range ${statement.name} in ${statement.lower}..${statement.upper};`];
     return [
       `${indent}for ${statement.name} in ${statement.lower}..${statement.upper} {`,
       ...printStatements(statement.body, depth + 1),
@@ -338,21 +389,38 @@ class Lowerer {
     const totalRounds = POSEIDON_FULL_ROUNDS + POSEIDON_PARTIAL_ROUNDS;
     for (let round = 0; round < totalRounds; round++) {
       const full = round < halfFull || round >= halfFull + POSEIDON_PARTIAL_ROUNDS;
-      state = state.map((wire, index) => this.builder.add(wire, this.constant(constants[round]![index]!)));
-      state = state.map((wire, index) => full || index === 0 ? this.power7(wire) : wire);
-      state = POSEIDON_MDS.map((row) => row.reduce((sum, coefficient, index) => this.builder.add(sum, this.builder.mul(this.constant(coefficient), state[index]!)), this.constant(0n)));
+      state = state.map((wire, index) =>
+        this.builder.add(wire, this.constant(constants[round]![index]!)),
+      );
+      state = state.map((wire, index) => (full || index === 0 ? this.power7(wire) : wire));
+      state = POSEIDON_MDS.map((row) =>
+        row.reduce(
+          (sum, coefficient, index) =>
+            this.builder.add(sum, this.builder.mul(this.constant(coefficient), state[index]!)),
+          this.constant(0n),
+        ),
+      );
     }
     return state[0]!;
   }
 
-  private async lowerExpression(expression: Expression, loopValues: ReadonlyMap<string, number>): Promise<number> {
+  private async lowerExpression(
+    expression: Expression,
+    loopValues: ReadonlyMap<string, number>,
+  ): Promise<number> {
     switch (expression.kind) {
-      case 'number': return this.constant(expression.value);
+      case 'number':
+        return this.constant(expression.value);
       case 'name': {
         const loopValue = loopValues.get(expression.name);
         if (loopValue !== undefined) return this.constant(BigInt(loopValue));
         const wire = this.wires.get(expression.name);
-        if (wire === undefined) throw new WitnessScriptError(`Unknown name ${JSON.stringify(expression.name)}.`, expression.token.start, expression.token.end);
+        if (wire === undefined)
+          throw new WitnessScriptError(
+            `Unknown name ${JSON.stringify(expression.name)}.`,
+            expression.token.start,
+            expression.token.end,
+          );
         return wire;
       }
       case 'binary': {
@@ -362,59 +430,129 @@ class Lowerer {
         if (expression.operator === '-') return this.subtract(left, right);
         return this.builder.mul(left, right);
       }
-      case 'call': return this.lowerCall(expression, loopValues);
+      case 'call':
+        return this.lowerCall(expression, loopValues);
     }
   }
 
-  private async lowerCall(expression: Extract<Expression, { kind: 'call' }>, loopValues: ReadonlyMap<string, number>): Promise<number> {
+  private async lowerCall(
+    expression: Extract<Expression, { kind: 'call' }>,
+    loopValues: ReadonlyMap<string, number>,
+  ): Promise<number> {
     if (expression.name === 'mimc') {
-      if (expression.args.length !== 1) throw new WitnessScriptError('mimc expects exactly one field input.', expression.token.start, expression.token.end);
+      if (expression.args.length !== 1)
+        throw new WitnessScriptError(
+          'mimc expects exactly one field input.',
+          expression.token.start,
+          expression.token.end,
+        );
       const input = await this.lowerExpression(expression.args[0]!, loopValues);
       let state = input;
-      for (let round = 0; round < 32; round++) state = this.power7(this.builder.add(state, this.constant(await mimcConstant(round))));
+      for (let round = 0; round < 32; round++)
+        state = this.power7(this.builder.add(state, this.constant(await mimcConstant(round))));
       return this.builder.add(state, input);
     }
     if (expression.name === 'poseidon') {
-      if (expression.args.length !== 2) throw new WitnessScriptError('poseidon expects exactly two field inputs.', expression.token.start, expression.token.end);
+      if (expression.args.length !== 2)
+        throw new WitnessScriptError(
+          'poseidon expects exactly two field inputs.',
+          expression.token.start,
+          expression.token.end,
+        );
       return this.lowerPoseidon(
         await this.lowerExpression(expression.args[0]!, loopValues),
         await this.lowerExpression(expression.args[1]!, loopValues),
       );
     }
     if (expression.name === 'merkle_path') {
-      if (expression.args.length !== 3) throw new WitnessScriptError('merkle_path expects leaf, sibling, and a boolean direction.', expression.token.start, expression.token.end);
+      if (expression.args.length !== 3)
+        throw new WitnessScriptError(
+          'merkle_path expects leaf, sibling, and a boolean direction.',
+          expression.token.start,
+          expression.token.end,
+        );
       const leaf = await this.lowerExpression(expression.args[0]!, loopValues);
       const sibling = await this.lowerExpression(expression.args[1]!, loopValues);
       const direction = await this.lowerExpression(expression.args[2]!, loopValues);
-      this.builder.assertZero(this.builder.mul(direction, this.subtract(direction, this.constant(1n))));
-      const left = this.builder.add(leaf, this.builder.mul(direction, this.subtract(sibling, leaf)));
-      const right = this.builder.add(sibling, this.builder.mul(direction, this.subtract(leaf, sibling)));
+      this.builder.assertZero(
+        this.builder.mul(direction, this.subtract(direction, this.constant(1n))),
+      );
+      const left = this.builder.add(
+        leaf,
+        this.builder.mul(direction, this.subtract(sibling, leaf)),
+      );
+      const right = this.builder.add(
+        sibling,
+        this.builder.mul(direction, this.subtract(leaf, sibling)),
+      );
       return this.lowerPoseidon(left, right);
     }
-    throw new WitnessScriptError(`Unknown standard-library function ${JSON.stringify(expression.name)}.`, expression.token.start, expression.token.end);
+    throw new WitnessScriptError(
+      `Unknown standard-library function ${JSON.stringify(expression.name)}.`,
+      expression.token.start,
+      expression.token.end,
+    );
   }
 
-  private async lowerRange(statement: Extract<Statement, { kind: 'range' }>, loopValues: ReadonlyMap<string, number>): Promise<void> {
-    if (loopValues.has(statement.name)) throw new WitnessScriptError('A range target must be an input or let binding, not a loop counter.', statement.token.start, statement.token.end);
+  private async lowerRange(
+    statement: Extract<Statement, { kind: 'range' }>,
+    loopValues: ReadonlyMap<string, number>,
+  ): Promise<void> {
+    if (loopValues.has(statement.name))
+      throw new WitnessScriptError(
+        'A range target must be an input or let binding, not a loop counter.',
+        statement.token.start,
+        statement.token.end,
+      );
     const source = this.wires.get(statement.name);
-    if (source === undefined) throw new WitnessScriptError(`Unknown range target ${JSON.stringify(statement.name)}.`, statement.token.start, statement.token.end);
+    if (source === undefined)
+      throw new WitnessScriptError(
+        `Unknown range target ${JSON.stringify(statement.name)}.`,
+        statement.token.start,
+        statement.token.end,
+      );
     this.builder.lookup(source);
-    this.ranges.push({ sourceName: statement.name, lower: statement.lower, upper: statement.upper });
+    this.ranges.push({
+      sourceName: statement.name,
+      lower: statement.lower,
+      upper: statement.upper,
+    });
   }
 
-  private async lowerStatements(statements: readonly Statement[], loopValues: ReadonlyMap<string, number>): Promise<void> {
+  private async lowerStatements(
+    statements: readonly Statement[],
+    loopValues: ReadonlyMap<string, number>,
+  ): Promise<void> {
     for (const statement of statements) {
       if (statement.kind === 'input') {
-        if (loopValues.size > 0) throw new WitnessScriptError('Inputs must be declared outside a for loop.', statement.token.start, statement.token.end);
-        if (this.wires.has(statement.name)) throw new WitnessScriptError(`Duplicate binding ${JSON.stringify(statement.name)}.`, statement.token.start, statement.token.end);
+        if (loopValues.size > 0)
+          throw new WitnessScriptError(
+            'Inputs must be declared outside a for loop.',
+            statement.token.start,
+            statement.token.end,
+          );
+        if (this.wires.has(statement.name))
+          throw new WitnessScriptError(
+            `Duplicate binding ${JSON.stringify(statement.name)}.`,
+            statement.token.start,
+            statement.token.end,
+          );
         const wire = statement.visibility === 'public' ? this.builder.pub() : this.builder.priv();
         this.wires.set(statement.name, wire);
         this.inputs.set(statement.name, wire);
         continue;
       }
       if (statement.kind === 'let') {
-        if (this.wires.has(statement.name) || loopValues.has(statement.name)) throw new WitnessScriptError(`Duplicate binding ${JSON.stringify(statement.name)}.`, statement.token.start, statement.token.end);
-        this.wires.set(statement.name, await this.lowerExpression(statement.expression, loopValues));
+        if (this.wires.has(statement.name) || loopValues.has(statement.name))
+          throw new WitnessScriptError(
+            `Duplicate binding ${JSON.stringify(statement.name)}.`,
+            statement.token.start,
+            statement.token.end,
+          );
+        this.wires.set(
+          statement.name,
+          await this.lowerExpression(statement.expression, loopValues),
+        );
         continue;
       }
       if (statement.kind === 'assert') {
@@ -437,13 +575,30 @@ class Lowerer {
 
   async compile(program: WitnessScriptProgram): Promise<CompiledWitnessScript> {
     await this.lowerStatements(program.statements, new Map());
-    const publicOrder = program.statements
-      .flatMap((statement) => statement.kind === 'input' && statement.visibility === 'public' ? [this.inputs.get(statement.name)!] : []);
+    const publicOrder = program.statements.flatMap((statement) =>
+      statement.kind === 'input' && statement.visibility === 'public'
+        ? [this.inputs.get(statement.name)!]
+        : [],
+    );
     const range = this.ranges[0];
-    if (range !== undefined && this.ranges.some((candidate) => candidate.lower !== range.lower || candidate.upper !== range.upper)) {
-      throw new WitnessScriptError('A circuit currently uses one fixed lookup table, so all range statements must share the same bounds.', 0, printWitnessScript(program).length);
+    if (
+      range !== undefined &&
+      this.ranges.some(
+        (candidate) => candidate.lower !== range.lower || candidate.upper !== range.upper,
+      )
+    ) {
+      throw new WitnessScriptError(
+        'A circuit currently uses one fixed lookup table, so all range statements must share the same bounds.',
+        0,
+        printWitnessScript(program).length,
+      );
     }
-    const lookupTable = range === undefined ? undefined : Array.from({ length: range.upper - range.lower + 1 }, (_, index) => BigInt(range.lower + index));
+    const lookupTable =
+      range === undefined
+        ? undefined
+        : Array.from({ length: range.upper - range.lower + 1 }, (_, index) =>
+            BigInt(range.lower + index),
+          );
     const circuit: Circuit = {
       ...this.builder.build(program.name, publicOrder, lookupTable),
       provenance: { kind: 'witness-script', source: printWitnessScript(program) },
@@ -458,7 +613,8 @@ class Lowerer {
         const result = new Map<number, bigint>();
         for (const [name, wire] of inputs) {
           const value = values[name];
-          if (value === undefined) throw new Error(`Witness Script input ${JSON.stringify(name)} is missing.`);
+          if (value === undefined)
+            throw new Error(`Witness Script input ${JSON.stringify(name)} is missing.`);
           result.set(wire, value);
         }
         for (const range of ranges) {

@@ -54,15 +54,23 @@ export function validate(c: Circuit): ValidationIssue[] {
   for (const gate of c.gates) {
     if (gatesById.has(gate.id)) issues.push({ kind: 'duplicate', gateId: gate.id });
     else gatesById.set(gate.id, gate);
-    if (gate.inputs.length !== expectedArity[gate.op]) issues.push({ kind: 'arity', gateId: gate.id });
-    if (gate.op === 'const' && gate.value === undefined) issues.push({ kind: 'constant', gateId: gate.id });
-    if (gate.op === 'lookup' && (c.lookupTable === undefined || c.lookupTable.length === 0)) issues.push({ kind: 'lookup', gateId: gate.id });
+    if (gate.inputs.length !== expectedArity[gate.op])
+      issues.push({ kind: 'arity', gateId: gate.id });
+    if (gate.op === 'const' && gate.value === undefined)
+      issues.push({ kind: 'constant', gateId: gate.id });
+    if (gate.op === 'lookup' && (c.lookupTable === undefined || c.lookupTable.length === 0))
+      issues.push({ kind: 'lookup', gateId: gate.id });
   }
   if (c.lookupTable !== undefined) {
     const canonical = new Set(c.lookupTable.map(String));
-    if (c.lookupTable.length === 0 || (c.lookupMode !== 'multiset' && canonical.size !== c.lookupTable.length)) issues.push({ kind: 'lookup', gateId: -1 });
+    if (
+      c.lookupTable.length === 0 ||
+      (c.lookupMode !== 'multiset' && canonical.size !== c.lookupTable.length)
+    )
+      issues.push({ kind: 'lookup', gateId: -1 });
   }
-  if (c.lookupMode === 'multiset' && c.lookupTableTags?.length !== c.lookupTable?.length) issues.push({ kind: 'lookup', gateId: -1 });
+  if (c.lookupMode === 'multiset' && c.lookupTableTags?.length !== c.lookupTable?.length)
+    issues.push({ kind: 'lookup', gateId: -1 });
 
   const publicIds = new Set<number>();
   for (const gateId of c.publicOrder) {
@@ -72,7 +80,8 @@ export function validate(c: Circuit): ValidationIssue[] {
     publicIds.add(gateId);
   }
   for (const gate of c.gates) {
-    if (gate.op === 'pub' && !publicIds.has(gate.id)) issues.push({ kind: 'public', gateId: gate.id });
+    if (gate.op === 'pub' && !publicIds.has(gate.id))
+      issues.push({ kind: 'public', gateId: gate.id });
   }
 
   for (const gate of c.gates) {

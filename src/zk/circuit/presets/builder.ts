@@ -44,10 +44,27 @@ export class PresetBuilder {
   }
 
   public build(name: string, publicOrder: number[], lookupTable?: bigint[]): Circuit {
-    return { name, gates: this.gates, publicOrder, ...(lookupTable === undefined ? {} : { lookupTable }) };
+    return {
+      name,
+      gates: this.gates,
+      publicOrder,
+      ...(lookupTable === undefined ? {} : { lookupTable }),
+    };
   }
 
-  public buildMultiset(name: string, publicOrder: number[], lookupTable: bigint[], lookupTableTags: bigint[]): Circuit {
-    return { name, gates: this.gates, publicOrder, lookupTable, lookupMode: 'multiset', lookupTableTags };
+  public buildMultiset(
+    name: string,
+    publicOrder: number[],
+    lookupTable: bigint[],
+    lookupTableTags: bigint[],
+  ): Circuit {
+    return {
+      name,
+      gates: this.gates,
+      publicOrder,
+      lookupTable,
+      lookupMode: 'multiset',
+      lookupTableTags,
+    };
   }
 }

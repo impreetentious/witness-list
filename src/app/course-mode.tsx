@@ -32,8 +32,13 @@ export function CourseMode({ onOpenLesson, activeLessonId }: CourseModeProps) {
   function toggle(id: string): void {
     setComplete((current) => {
       const next = new Set(current);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      try { window.localStorage.setItem(storageKey, JSON.stringify([...next])); } catch { /* optional persistence */ }
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      try {
+        window.localStorage.setItem(storageKey, JSON.stringify([...next]));
+      } catch {
+        /* optional persistence */
+      }
       return next;
     });
   }
@@ -52,9 +57,16 @@ export function CourseMode({ onOpenLesson, activeLessonId }: CourseModeProps) {
       {open && (
         <ol className="lesson-list">
           {lessons.map((lesson) => (
-            <li key={lesson.id} className={`${complete.has(lesson.id) ? 'complete' : ''} ${activeLessonId === lesson.id ? 'active-lesson' : ''}`}>
+            <li
+              key={lesson.id}
+              className={`${complete.has(lesson.id) ? 'complete' : ''} ${activeLessonId === lesson.id ? 'active-lesson' : ''}`}
+            >
               <label>
-                <input type="checkbox" checked={complete.has(lesson.id)} onChange={() => toggle(lesson.id)} />
+                <input
+                  type="checkbox"
+                  checked={complete.has(lesson.id)}
+                  onChange={() => toggle(lesson.id)}
+                />
                 <span>
                   <strong>{lesson.title}</strong>
                   <small>Player stage {lesson.stage}</small>

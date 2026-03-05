@@ -6,8 +6,14 @@ import { add, embed, fp2One, inv, isZero, mul } from '../fp2';
 import type { CompiledCircuit, Witness } from '../circuit/compile';
 import { K1, K2 } from './permutation';
 
-export interface PermutationFactorsFp2 { numerators: Fp2[]; denominators: Fp2[] }
-export interface GrandProductFp2 extends PermutationFactorsFp2 { z: Fp2[]; partials: Fp2[] }
+export interface PermutationFactorsFp2 {
+  numerators: Fp2[];
+  denominators: Fp2[];
+}
+export interface GrandProductFp2 extends PermutationFactorsFp2 {
+  z: Fp2[];
+  partials: Fp2[];
+}
 
 function powersOnH(n: number): Fp[] {
   const omega = twoAdicRoot(Math.log2(n));
@@ -28,31 +34,58 @@ function factor(wire: Fp, beta: Fp2, point: Fp, gamma: Fp2): Fp2 {
   return add(add(embed(wire), mul(beta, embed(point))), gamma);
 }
 
-export function permutationFactorsFp2(circuit: CompiledCircuit, witness: Witness, beta: Fp2, gamma: Fp2): PermutationFactorsFp2 {
+export function permutationFactorsFp2(
+  circuit: CompiledCircuit,
+  witness: Witness,
+  beta: Fp2,
+  gamma: Fp2,
+): PermutationFactorsFp2 {
   const powers = powersOnH(circuit.n);
   const numerators = Array.from({ length: circuit.n }, () => fp2One);
   const denominators = Array.from({ length: circuit.n }, () => fp2One);
   for (let row = 0; row < circuit.n; row++) {
     const x = powers[row]!;
-    numerators[row] = mul(mul(
-      factor(witness.a[row]!, beta, x, gamma),
-      factor(witness.b[row]!, beta, mulBase(K1, x), gamma),
-    ), factor(witness.c[row]!, beta, mulBase(K2, x), gamma));
-    denominators[row] = mul(mul(
-      factor(witness.a[row]!, beta, slotPoint(circuit.sigma[row]!, circuit.n, powers), gamma),
-      factor(witness.b[row]!, beta, slotPoint(circuit.sigma[circuit.n + row]!, circuit.n, powers), gamma),
-    ), factor(witness.c[row]!, beta, slotPoint(circuit.sigma[2 * circuit.n + row]!, circuit.n, powers), gamma));
+    numerators[row] = mul(
+      mul(
+        factor(witness.a[row]!, beta, x, gamma),
+        factor(witness.b[row]!, beta, mulBase(K1, x), gamma),
+      ),
+      factor(witness.c[row]!, beta, mulBase(K2, x), gamma),
+    );
+    denominators[row] = mul(
+      mul(
+        factor(witness.a[row]!, beta, slotPoint(circuit.sigma[row]!, circuit.n, powers), gamma),
+        factor(
+          witness.b[row]!,
+          beta,
+          slotPoint(circuit.sigma[circuit.n + row]!, circuit.n, powers),
+          gamma,
+        ),
+      ),
+      factor(
+        witness.c[row]!,
+        beta,
+        slotPoint(circuit.sigma[2 * circuit.n + row]!, circuit.n, powers),
+        gamma,
+      ),
+    );
   }
   return { numerators, denominators };
 }
 
-export function buildGrandProductFp2(circuit: CompiledCircuit, witness: Witness, beta: Fp2, gamma: Fp2): GrandProductFp2 {
+export function buildGrandProductFp2(
+  circuit: CompiledCircuit,
+  witness: Witness,
+  beta: Fp2,
+  gamma: Fp2,
+): GrandProductFp2 {
   const { numerators, denominators } = permutationFactorsFp2(circuit, witness, beta, gamma);
   const z = Array.from({ length: circuit.n }, () => fp2One);
   const partials = Array.from({ length: circuit.n }, () => fp2One);
   let running = fp2One;
   for (let row = 0; row < circuit.n; row++) {
-    if (isZero(denominators[row]!)) throw new Error(`Fp² grand-product denominator is zero at row ${row}`);
+    if (isZero(denominators[row]!))
+      throw new Error(`Fp² grand-product denominator is zero at row ${row}`);
     running = mul(running, mul(numerators[row]!, inv(denominators[row]!)));
     partials[row] = running;
     if (row + 1 < circuit.n) z[row + 1] = running;
