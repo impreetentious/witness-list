@@ -680,7 +680,7 @@ describe('M4/M5 gates — protocol', () => {
   });
 });
 
-describe('Phase 2A gates — quadratic extension challenges', () => {
+describe('Z15: Phase 2A gates — quadratic extension challenges', () => {
   it('uses the independently verified non-residue and embeds the base field faithfully', () => {
     expect(nonResidueIsValid()).toBe(true);
     expect(equalFp2(embed(123n), fp2(123n, 0n))).toBe(true);
@@ -810,7 +810,7 @@ describe('Phase 2B/2C gates — bound lookups and multiset Sudoku', () => {
   }, 30_000);
 });
 
-describe('Phase 2D gates — Poseidon workshop hash', () => {
+describe('Z16: Phase 2D gates — Poseidon workshop hash', () => {
   it('matches the independently regenerated reference vectors', async () => {
     await expect(poseidonHash(0n, 0n)).resolves.toBe(13593260552114296815n);
     await expect(poseidonHash(1n, 2n)).resolves.toBe(18371212222320491351n);
@@ -865,7 +865,7 @@ describe('Phase 2E gates — post-commitment grinding deterrent', () => {
   });
 });
 
-describe('Phase 3 gates — Witness Script', () => {
+describe('Z17: Phase 3 gates — Witness Script', () => {
   it('property-checks canonical pretty-print and parse idempotence', () => {
     fc.assert(
       fc.property(

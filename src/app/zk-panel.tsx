@@ -13,6 +13,9 @@ import {
 import type { TranscriptEntry } from '@/zk/types';
 import type { ProofTrace } from '@/zk/types';
 
+const HISTOGRAM_PARAMS = { n: 8, blowup: 8, queries: 4, zk: true };
+const HISTOGRAM_POLYNOMIAL = [3n, 1n, 4n];
+
 function seededValues(start: bigint): () => bigint {
   let value = start;
   return () => value++;
@@ -22,17 +25,15 @@ export function ZkPanel({ trace, onRunZk }: { trace?: ProofTrace; onRunZk?: () =
   const [entries, setEntries] = useState<TranscriptEntry[]>();
   const [error, setError] = useState<string>();
   const [histogramZk, setHistogramZk] = useState(true);
-  const params = { n: 8, blowup: 8, queries: 4, zk: true };
-  const polynomial = [3n, 1n, 4n];
-  const first = blind(polynomial, 8, params, seededValues(10n));
-  const second = blind(polynomial, 8, params, seededValues(20n));
+  const first = blind(HISTOGRAM_POLYNOMIAL, 8, HISTOGRAM_PARAMS, seededValues(10n));
+  const second = blind(HISTOGRAM_POLYNOMIAL, 8, HISTOGRAM_PARAMS, seededValues(20n));
   const histogram = useMemo(() => {
     const buckets = Array.from({ length: 16 }, () => 0);
     for (let replay = 0; replay < 200; replay++) {
       const candidate = blind(
-        polynomial,
+        HISTOGRAM_POLYNOMIAL,
         8,
-        { ...params, zk: histogramZk },
+        { ...HISTOGRAM_PARAMS, zk: histogramZk },
         seededFieldSource(replay + 1),
       );
       buckets[Number(evalAt(candidate, 7n) & 15n)]!++;
@@ -44,7 +45,7 @@ export function ZkPanel({ trace, onRunZk }: { trace?: ProofTrace; onRunZk?: () =
   async function simulate(): Promise<void> {
     setError(undefined);
     try {
-      setEntries(await simulateTranscript(params, 42));
+      setEntries(await simulateTranscript(HISTOGRAM_PARAMS, 42));
     } catch (caught) {
       setError(
         caught instanceof Error ? caught.message : 'Could not create the transcript illustration.',
@@ -70,7 +71,7 @@ export function ZkPanel({ trace, onRunZk }: { trace?: ProofTrace; onRunZk?: () =
         <div>
           <dt>Original P(7)</dt>
           <dd>
-            <FieldElement value={evalAt(polynomial, 7n)} />
+            <FieldElement value={evalAt(HISTOGRAM_POLYNOMIAL, 7n)} />
           </dd>
         </div>
         <div>
