@@ -32,6 +32,10 @@ jobs:
           # Project-site subpath. Override to '' for a custom domain or user/org site.
           BASE_PATH: /${{ github.event.repository.name }}
       - run: npm test
+      - run: npm run budget:bundle
+      - run: npm run budget:performance
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
       - uses: actions/upload-pages-artifact@v3
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         with:
