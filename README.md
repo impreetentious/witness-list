@@ -46,6 +46,7 @@ npm run dev        # local dev server on http://localhost:3000
 npm run typecheck
 npm test           # algebra laws, protocol gates, negative (attack) suite
 npm run lint
+npm run format:check
 npm run build      # static export in out/
 ```
 
@@ -70,4 +71,4 @@ MIT — see [LICENSE](./LICENSE).
 
 ---
 
-**Version:** v0.6.0
+**Version:** v0.6.1

@@ -21,6 +21,7 @@ check:
   script:
     - npm ci --cache .npm --prefer-offline
     - npm run lint
+    - npm run format:check
     # next build type-checks the whole project (tsconfig include covers zk/ and tests)
     - BASE_PATH="/$CI_PROJECT_NAME" npm run build
     - npm test
