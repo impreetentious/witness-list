@@ -1,7 +1,7 @@
 {
   "name": "witness-list",
   "private": true,
-  "version": "0.6.4",
+  "version": "0.6.5",
   "description": "Witness List — a zero-knowledge proof workshop. Build a claim, prove it, try to cheat.",
   "license": "MIT",
   "repository": {
@@ -18,12 +18,14 @@
     "test:perf": "playwright test tests/e2e/performance.spec.ts",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
+    "check:gates": "node scripts/check-gate-coverage.mjs",
     "lint": "oxlint --deny-warnings .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "budget:bundle": "node scripts/bundle-budget.mjs",
     "budget:performance": "node scripts/performance-budget.mjs",
-    "gates": "npm run budget:bundle && npm run budget:performance && npm run test:e2e"
+    "gates": "npm run budget:bundle && npm run budget:performance && npm run test:e2e",
+    "check:version": "node scripts/check-version-coherence.mjs"
   },
   "engines": {
     "node": ">=22"
@@ -38,7 +40,7 @@
     "@codemirror/commands": "^6.10.2",
     "@codemirror/language": "^6.12.1",
     "@codemirror/state": "^6.5.4",
-    "@codemirror/view": "^6.39.14",
+    "@codemirror/view": "^6.39.15",
     "@fontsource-variable/inter": "^5.2.8",
     "@fontsource/jetbrains-mono": "^5.2.8",
     "@xyflow/react": "^12.10.1",

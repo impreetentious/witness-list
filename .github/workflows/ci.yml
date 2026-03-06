@@ -7,8 +7,6 @@ on:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
   group: pages-${{ github.ref }}
@@ -24,9 +22,11 @@ jobs:
           node-version: 22.22.0
           cache: npm
       - run: npm ci
+      - run: npm run check:version
+      - run: npm run typecheck
       - run: npm run lint
+      - run: npm run check:gates
       - run: npm run format:check
-      # next build type-checks the whole project (tsconfig include covers zk/ and tests)
       - run: npm run build
         env:
           # Project-site subpath. Override to '' for a custom domain or user/org site.
@@ -45,6 +45,10 @@ jobs:
     needs: check
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
