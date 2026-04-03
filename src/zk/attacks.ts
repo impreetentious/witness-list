@@ -1,6 +1,6 @@
 /**
  * The three canned malicious provers — shared verbatim between the cheat-mode UI
- * and the negative test suite (Z9): the demo IS the test. M5.
+ * and the negative test suite (Z9): the demo IS the test. docs/PROTOCOL-SPEC.md §6.3. M5.
  *
  * A1 tamperWitness  -> caught by V2 (identity at ζ) — after the stage-8 remainder banner
  * A2 tamperLeaf     -> caught by V3 (Merkle path) at a specific query

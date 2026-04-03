@@ -1,5 +1,5 @@
 /**
- * Coefficient-form polynomial ops. M1.
+ * Coefficient-form polynomial ops. docs/PROTOCOL-SPEC.md §4.2, §4.4. M1.
  * A Poly is Fp[] with poly[i] the x^i coefficient; trailing zeros trimmed.
  */
 import { P, add, inv, mul, pow, sub, twoAdicRoot } from './field';

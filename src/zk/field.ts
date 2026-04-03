@@ -1,5 +1,5 @@
 /**
- * Goldilocks field F_p, p = 2^64 − 2^32 + 1.
+ * Goldilocks field F_p, p = 2^64 − 2^32 + 1. docs/PROTOCOL-SPEC.md §4.1.
  * IMPLEMENTED (scaffold anchor) — tested against independently computed vectors
  * (regenerable via tools/reference.py).
  *

@@ -1,4 +1,4 @@
-/** Quotient commitment layout shared by prover and verifier. */
+/** Quotient commitment layout shared by prover and verifier. docs/PROTOCOL-SPEC.md §4.4. */
 import type { Params } from '../types';
 
 const BASE_LABELS = ['t-lo', 't-mid', 't-hi'] as const;

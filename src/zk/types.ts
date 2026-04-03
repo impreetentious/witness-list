@@ -1,6 +1,6 @@
 /**
  * Protocol data types — the Proof (what the verifier sees) vs the ProofTrace
- * (Proof + every intermediate artifact, for the player).
+ * (Proof + every intermediate artifact, for the player). docs/PROTOCOL-SPEC.md §3, §8.
  * The separation is the pedagogy: the UI's "what the verifier actually sees"
  * toggle greys out everything not in Proof.
  */
@@ -37,7 +37,7 @@ export interface QueryOpeningV1 {
   /**
    * Per non-final FRI layer, the canonical x/-x pair and both authenticated
    * paths. A Merkle sibling hash is not an opening of the sibling value, so
-   * both paths are necessary for the fold check.
+   * both paths are necessary for the fold check (docs/PROTOCOL-SPEC.md §4.7).
    */
   friLayers: {
     at: Fp;

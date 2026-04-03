@@ -1,5 +1,5 @@
 /**
- * SHA-256 Merkle tree over LDE evaluations (WebCrypto, async). M2.
+ * SHA-256 Merkle tree over LDE evaluations (WebCrypto, async). docs/PROTOCOL-SPEC.md §4.5. M2.
  * Leaf i = H(domainSep ‖ i ‖ eval bytes LE). Wire polys share composite leaves (a‖b‖c).
  */
 import type { Fp } from './field';

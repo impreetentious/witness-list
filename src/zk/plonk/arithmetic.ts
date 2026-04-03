@@ -1,4 +1,4 @@
-/** Shared PLONK evaluation helpers. */
+/** Shared PLONK evaluation helpers. docs/PROTOCOL-SPEC.md §§4.2–4.3, 4.8. */
 import { GENERATOR, add, mul, neg, pow, twoAdicRoot } from '../field';
 import type { Fp } from '../field';
 import { evalAt, lagrangeAt } from '../poly';
@@ -36,7 +36,7 @@ export function sigmaPolynomials(circuit: CompiledCircuit): [Poly, Poly, Poly] {
   return [interpolate(values[0]!), interpolate(values[1]!), interpolate(values[2]!)];
 }
 
-/** PI(ζ) is verifier-owned and recomputed barycentrically. */
+/** PI(ζ) is verifier-owned and recomputed barycentrically. docs/PROTOCOL-SPEC.md §4.3. */
 export function publicInputAt(publicInputs: readonly Fp[], n: number, zeta: Fp): Fp {
   let value = 0n;
   for (let row = 0; row < publicInputs.length; row++) {
