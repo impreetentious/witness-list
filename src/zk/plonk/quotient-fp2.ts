@@ -1,4 +1,4 @@
-/** Protocol-v2 PLONK + Plookup constraint composition over Fp². */
+/** docs/PROTOCOL-SPEC.md §4.4 — Protocol-v2 PLONK + Plookup constraint composition over Fp². */
 import type { Fp } from '../field';
 import { mul as mulBase, neg as negBase, twoAdicRoot } from '../field';
 import type { Fp2 } from '../fp2';

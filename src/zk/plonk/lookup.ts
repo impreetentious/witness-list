@@ -1,4 +1,4 @@
-/** Plookup-style sorted-concatenation grand product for protocol v2. */
+/** docs/PROTOCOL-SPEC.md §4.3 — Plookup-style sorted-concatenation grand product for protocol v2. */
 import type { Fp } from '../field';
 import type { Fp2 } from '../fp2';
 import { add, embed, fp2One, inv, isZero, mul } from '../fp2';

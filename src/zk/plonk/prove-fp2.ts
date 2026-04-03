@@ -1,4 +1,4 @@
-/** Full protocol-v2 prover: Fp² challenges + bound Plookup + Fp² DEEP-FRI. */
+/** docs/PROTOCOL-SPEC.md §4.6 — Full protocol-v2 prover: Fp² challenges + bound Plookup + Fp² DEEP-FRI. */
 import type { Fp } from '../field';
 import { mul as mulBase, twoAdicRoot } from '../field';
 import type { Fp2 } from '../fp2';

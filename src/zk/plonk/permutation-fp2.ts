@@ -1,4 +1,4 @@
-/** Copy-permutation grand product over Fp² challenges (protocol v2). */
+/** docs/PROTOCOL-SPEC.md §4.3 — Copy-permutation grand product over Fp² challenges (protocol v2). */
 import type { Fp } from '../field';
 import { mul as mulBase, twoAdicRoot } from '../field';
 import type { Fp2 } from '../fp2';

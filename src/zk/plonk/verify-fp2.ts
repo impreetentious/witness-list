@@ -1,4 +1,4 @@
-/** Checklist verifier for protocol wire v2 (Fp² + Plookup). */
+/** docs/PROTOCOL-SPEC.md §4.8 — Checklist verifier for protocol wire v2 (Fp² + Plookup). */
 import { GENERATOR, P, mul as mulBase, pow as powBase, twoAdicRoot } from '../field';
 import type { Fp } from '../field';
 import type { Fp2 } from '../fp2';
