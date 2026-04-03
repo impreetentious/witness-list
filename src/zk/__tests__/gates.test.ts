@@ -114,7 +114,7 @@ it('rejects a circuit whose power-of-two trace domain exceeds the teaching limit
   ).rejects.toThrow(new RegExp(`${MAX_TRACE_ROWS}`));
 });
 
-describe('Z2: fixed vectors (independently computed)', () => {
+describe('Z2: fixed vectors (independently computed — docs/PROTOCOL-SPEC.md §13)', () => {
   it('mul/add vectors', () => {
     const a = 16045690981402826360n;
     const b = 14627333967224062753n;
