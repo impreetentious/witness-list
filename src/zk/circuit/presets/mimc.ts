@@ -1,4 +1,4 @@
-/** Preset 3: MiMC-7 preimage. Constants are derived at runtime. */
+/** Preset 3: MiMC-7 preimage. Constants derive from docs/PROTOCOL-SPEC.md §7 at runtime. */
 import { add, mod, pow } from '../../field';
 import type { Fp } from '../../field';
 import type { Circuit } from '../ir';

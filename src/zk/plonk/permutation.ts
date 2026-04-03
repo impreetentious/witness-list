@@ -1,6 +1,6 @@
 /**
  * Copy constraints: σ polynomials + grand product Z with running-product log
- * (the telescoping column the UI renders). M4.
+ * (the telescoping column the UI renders). docs/PROTOCOL-SPEC.md §4.3. M4.
  * Gate Z5: hand-built 4-row case telescopes to 1; one broken copy ⇒ Z(end) ≠ 1.
  */
 import { add, inv, mul, twoAdicRoot } from '../field';
@@ -50,7 +50,7 @@ function assertCompatible(cc: CompiledCircuit, witness: Witness): void {
   if (cc.sigma.length !== 3 * n) throw new Error('sigma must map exactly 3n slots');
 }
 
-/** Numerator/denominator factors for the transition constraint. */
+/** Numerator/denominator factors for the transition constraint in docs/PROTOCOL-SPEC.md §4.3. */
 export function permutationFactors(
   cc: CompiledCircuit,
   witness: Witness,

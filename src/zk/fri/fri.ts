@@ -1,6 +1,6 @@
 /**
  * Batch DEEP-FRI: composition over the LDE coset, halving folds, layer commits,
- * queries with path walks. M5.
+ * queries with path walks. docs/PROTOCOL-SPEC.md §4.6 (round 5) + §4.7. M5.
  * Gate Z7 (fold property), Z8/Z9 (E2E + attacks), Z12 (grinding stats).
  */
 import { GENERATOR, add, inv, mul, pow, sub, twoAdicRoot } from '../field';
@@ -111,7 +111,7 @@ export function deepCompositionAt(
 
 /**
  * Interpolate values on shift·H, undoing the coefficient scaling used by the
- * coset NTT. This is the clear final polynomial.
+ * coset NTT. This is the clear final polynomial in docs/PROTOCOL-SPEC.md §4.7.
  */
 export function interpolateCoset(values: Fp[], shift: Fp): Fp[] {
   const coefficients = intt(values);

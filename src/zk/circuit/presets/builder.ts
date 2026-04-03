@@ -1,6 +1,6 @@
 /**
  * Small authoring helper for v1 preset circuits. It emits only the six public
- * IR operations — presets do not introduce custom gates.
+ * IR operations — presets do not introduce custom gates. docs/PROTOCOL-SPEC.md §§5, 7.
  */
 import type { Circuit, Gate, GateOp } from '../ir';
 

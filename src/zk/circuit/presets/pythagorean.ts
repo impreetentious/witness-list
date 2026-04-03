@@ -1,5 +1,5 @@
 /**
- * Preset 1: "I know (a,b) with a² + b² = c²" for public c.
+ * Preset 1: "I know (a,b) with a² + b² = c²" for public c. docs/PROTOCOL-SPEC.md §7.
  * IMPLEMENTED as the preset-format anchor: hand-authored layout, structured
  * input mapping, and the "fields are not integers" teaching callout.
  */

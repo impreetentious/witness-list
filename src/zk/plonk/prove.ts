@@ -1,5 +1,5 @@
 /**
- * Full prover pipeline, rounds 0–5. M4 (rounds 0–4) + M5 (round 5, FRI).
+ * Full prover pipeline, rounds 0–5. docs/PROTOCOL-SPEC.md §4.6. M4 (rounds 0–4) + M5 (round 5, FRI).
  * Emits ProofTrace (proof + every intermediate) for the player. Runs in the worker.
  * M4 alone is EXPLICITLY UNSOUND (no low-degree test) — label it everywhere.
  */

@@ -1,7 +1,7 @@
 /**
  * Checklist-shaped verifier: returns per-check results (V1–V7), never a bare
  * boolean — the checklist is both the UI and the negative-test oracle.
- * M4 (V1–V2) + M5 (V3–V7).
+ * docs/PROTOCOL-SPEC.md §4.8. M4 (V1–V2) + M5 (V3–V7).
  */
 import { GENERATOR, P, add, mul, pow, sub } from '../field';
 import type { Fp } from '../field';

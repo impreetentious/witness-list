@@ -1,4 +1,4 @@
-/** Circuit graph IR + validation. M3 (types now — they anchor the canvas). */
+/** Circuit graph IR + validation. docs/PROTOCOL-SPEC.md §5. M3 (types now — they anchor the canvas). */
 
 export type GateOp = 'pub' | 'priv' | 'const' | 'add' | 'mul' | 'assert0' | 'lookup';
 

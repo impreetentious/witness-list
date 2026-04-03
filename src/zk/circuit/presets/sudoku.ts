@@ -1,4 +1,4 @@
-/** Preset 2: 4×4 Sudoku. Uses only generic v1 arithmetic gates. */
+/** Preset 2: 4×4 Sudoku. docs/PROTOCOL-SPEC.md §7. Uses only generic v1 arithmetic gates. */
 import type { Fp } from '../../field';
 import type { Circuit } from '../ir';
 import { PresetBuilder } from './builder';
