@@ -34,7 +34,6 @@ for (const file of ['README.md']) {
   else if (found !== version) errors.push(`${file} version ${found} != package.json ${version}`);
 }
 
-
 if (errors.length) {
   console.error('version-coherence FAILED:');
   for (const error of errors) console.error(` - ${error}`);

@@ -3,7 +3,7 @@
 # https://<namespace>.gitlab.io/<project>/ (BASE_PATH set accordingly).
 # For a custom domain or user/group site, set BASE_PATH: '' below.
 
-image: node:22.22.0
+image: node:22.22.1
 
 cache:
   key:
@@ -27,6 +27,10 @@ check:
     - npm run format:check
     - BASE_PATH="/$CI_PROJECT_NAME" npm run build
     - npm test
+    - npm run budget:bundle
+    - npm run budget:performance
+    - npx playwright install --with-deps chromium
+    - npm run test:e2e
 
 pages:
   stage: deploy

@@ -61,6 +61,7 @@ export function WitnessScriptEditor({ onUseScript }: WitnessScriptEditorProps) {
           witnessScriptLanguage,
           syntaxHighlighting(defaultHighlightStyle),
           EditorView.lineWrapping,
+          EditorView.contentAttributes.of({ 'aria-labelledby': 'script-title' }),
           EditorView.updateListener.of((update) => {
             if (!update.docChanged) return;
             const next = update.state.doc.toString();
