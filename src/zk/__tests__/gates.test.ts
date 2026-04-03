@@ -1,5 +1,5 @@
 /**
- * The honesty gates. Z1/Z2 are REAL now (field.ts is implemented);
+ * The honesty gates — docs/PROTOCOL-SPEC.md §9. Z1/Z2 are REAL now (field.ts is implemented);
  * fixture values were computed by an independent Python implementation
  * (tools/reference.py) before any TypeScript existed. Every current Phase 1
  * acceptance gate below is executable in the node-only protocol suite.

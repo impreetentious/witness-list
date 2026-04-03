@@ -91,3 +91,25 @@ describe('zk/ purity boundary', () => {
     expect(offenders).toEqual([]);
   });
 });
+
+describe('zk/ formula citation discipline', () => {
+  const kernels = [
+    'src/zk/fp2-poly.ts',
+    'src/zk/grinding.ts',
+    'src/zk/poseidon.ts',
+    'src/zk/poseidon-merkle.ts',
+    'src/zk/plonk/lookup.ts',
+    'src/zk/plonk/permutation-fp2.ts',
+    'src/zk/plonk/prove-fp2.ts',
+    'src/zk/plonk/quotient-fp2.ts',
+    'src/zk/plonk/verify-fp2.ts',
+    'src/zk/fri/fri-fp2.ts',
+  ];
+
+  it('keeps the protocol formulas linked to their spec sections', () => {
+    for (const file of kernels) {
+      const header = read(file).split('\n').slice(0, 4).join('\n');
+      expect(header, file).toMatch(/PROTOCOL-SPEC\.md §(?:4\.|12)/);
+    }
+  });
+});

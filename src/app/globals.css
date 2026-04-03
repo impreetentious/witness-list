@@ -1,6 +1,6 @@
 @import '@xyflow/react/dist/style.css';
 
-/* Design tokens */
+/* Design tokens — docs/PROTOCOL-SPEC.md §6.5 */
 :root {
   --paper: #fbfaf7;
   --ink: #191a1c;

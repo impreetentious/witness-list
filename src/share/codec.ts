@@ -1,7 +1,7 @@
 /**
  * Versioned share payload codec. The short `#p=` path uses browser-native
  * deflate-raw when available; `#pu=` is an always-available uncompressed
- * fallback. Gate Z14.
+ * fallback. docs/PROTOCOL-SPEC.md §8, gate Z14.
  */
 import type { Circuit, Gate, GateOp } from '../zk/circuit/ir';
 import type { Fp } from '../zk/field';

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Independent reference implementation for cross-checking fixtures.
 
-Regenerates every field constant and the MiMC vectors (gate Z11).
+Regenerates every constant in docs/PROTOCOL-SPEC.md §13 and the MiMC vectors (gate Z11).
 Never hand-edit fixtures — rerun this. Usage: python3 tools/reference.py
 """
 import hashlib
