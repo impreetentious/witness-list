@@ -1,4 +1,4 @@
-/** Polynomial helpers over Fp². Domains remain base-field roots of unity. */
+/** docs/PROTOCOL-SPEC.md §4.4 — Polynomial helpers over Fp². Domains remain base-field roots of unity. */
 import type { Fp } from './field';
 import { inv as invBase, mul as mulBase, neg as negBase, twoAdicRoot } from './field';
 import type { Fp2 } from './fp2';

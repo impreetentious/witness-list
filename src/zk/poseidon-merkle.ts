@@ -1,4 +1,4 @@
-/** Prover-side Poseidon Merkle tree for workshop-scale field leaves. */
+/** docs/PROTOCOL-SPEC.md §12 / 2D — Prover-side Poseidon Merkle tree for workshop-scale field leaves. */
 import type { Fp } from './field';
 import { poseidonHash } from './poseidon';
 

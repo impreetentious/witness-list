@@ -1,5 +1,5 @@
 /**
- * Small, inspectable Poseidon permutation over Goldilocks.
+ * docs/PROTOCOL-SPEC.md §12 / 2D — Small, inspectable Poseidon permutation over Goldilocks.
  *
  * This teaching parameterisation uses width 3, rate 2, x^7, eight full rounds
  * and 22 partial rounds. Round constants are deterministically generated from

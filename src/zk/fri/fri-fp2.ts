@@ -1,4 +1,4 @@
-/** Fp² DEEP-FRI used by protocol wire v2. */
+/** docs/PROTOCOL-SPEC.md §4.7 — Fp² DEEP-FRI used by protocol wire v2. */
 import { GENERATOR, inv as invBase, mul as mulBase } from '../field';
 import type { Fp } from '../field';
 import type { Fp2 } from '../fp2';

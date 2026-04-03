@@ -1,5 +1,5 @@
 /**
- * Fiat–Shamir grinding deterrent. A prover finds a nonce whose hash with the
+ * docs/PROTOCOL-SPEC.md §4.9 / 2E — Fiat–Shamir grinding deterrent. A prover finds a nonce whose hash with the
  * post-commitment transcript challenge has k leading zero bits; the verifier
  * recomputes that one inexpensive check before deriving FRI query indices.
  */
