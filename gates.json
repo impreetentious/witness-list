@@ -1,0 +1,23 @@
+[
+  { "id": "Z1", "description": "field laws", "titleCount": 1 },
+  { "id": "Z2", "description": "fixed field vectors", "titleCount": 1 },
+  { "id": "Z3", "description": "NTT round trips", "titleCount": 1 },
+  { "id": "Z4", "description": "polynomial arithmetic", "titleCount": 1 },
+  { "id": "Z5", "description": "permutation argument", "titleCount": 1 },
+  { "id": "Z6", "description": "quotient argument", "titleCount": 1 },
+  { "id": "Z7", "description": "FRI folding", "titleCount": 1 },
+  { "id": "Z8", "description": "honest end-to-end proofs", "titleCount": 1 },
+  { "id": "Z9", "description": "attack rejection", "titleCount": 1 },
+  { "id": "Z10", "description": "golden transcript", "titleCount": 1 },
+  { "id": "Z11", "description": "MiMC vectors", "titleCount": 1 },
+  { "id": "Z12", "description": "grinding resistance", "titleCount": 2 },
+  { "id": "Z13", "description": "zero-knowledge blinding", "titleCount": 1 },
+  { "id": "Z14", "description": "share codec", "titleCount": 1 },
+  { "id": "Z15", "description": "quadratic extension", "titleCount": 1 },
+  { "id": "Z16", "description": "Poseidon and grinding nonce", "titleCount": 2 },
+  { "id": "Z17", "description": "Witness Script", "titleCount": 1 },
+  { "id": "Z18", "description": "script provenance", "titleCount": 1 },
+  { "id": "Z19", "description": "protocol-v2 propagation and v1 compatibility", "titleCount": 2 },
+  { "id": "Z20", "description": "lookups and multiset Sudoku", "titleCount": 1 },
+  { "id": "Z21", "description": "honesty copy", "titleCount": 1 }
+]

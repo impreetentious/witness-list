@@ -12,7 +12,7 @@ import { cosetLDE, interpolate, intt, ntt } from '../ntt';
 import { evalAt, lagrangeAt, polyAdd, polyDivRem, polyMul, vanishing } from '../poly';
 import { buildTree, verifyPath } from '../merkle';
 import { createTranscript } from '../transcript';
-import { compile, generateWitness } from '../circuit/compile';
+import { compile, generateWitness, MAX_TRACE_ROWS } from '../circuit/compile';
 import { validate } from '../circuit/ir';
 import { pythagorean } from '../circuit/presets/pythagorean';
 import { age, ageInputs, agePreset } from '../circuit/presets/age';
@@ -69,7 +69,7 @@ describe('Z1: field laws (property fuzz)', () => {
         expect(add(a, neg(a))).toBe(0n);
         expect(sub(a, b)).toBe(add(a, neg(b)));
       }),
-      { numRuns: 300 },
+      { numRuns: 1000 },
     );
   });
 
@@ -79,7 +79,7 @@ describe('Z1: field laws (property fuzz)', () => {
         expect(mul(a, inv(a))).toBe(1n);
         expect(pow(a, P - 1n)).toBe(1n);
       }),
-      { numRuns: 100 },
+      { numRuns: 1000 },
     );
   });
 
@@ -89,9 +89,29 @@ describe('Z1: field laws (property fuzz)', () => {
         const batch = batchInverse(xs);
         xs.forEach((x, i) => expect(batch[i]).toBe(inv(x)));
       }),
-      { numRuns: 50 },
+      { numRuns: 1000 },
     );
   });
+});
+
+it('rejects a circuit whose power-of-two trace domain exceeds the teaching limit', async () => {
+  await expect(
+    compile({
+      name: 'oversized trace',
+      // `const` rather than `priv`: witness declarations emit no trace row
+      // (compile.ts treats `pub`/`priv` as declarations only), so a circuit of
+      // 4097 `priv` gates compiles to a 32-row trace and never reaches the
+      // guard this test exists to prove. `const` is the cheapest row-emitting
+      // op — arity 0 with a required `value`.
+      gates: Array.from({ length: MAX_TRACE_ROWS + 1 }, (_, id) => ({
+        id: id + 1,
+        op: 'const' as const,
+        inputs: [],
+        value: 0n,
+      })),
+      publicOrder: [],
+    }),
+  ).rejects.toThrow(new RegExp(`${MAX_TRACE_ROWS}`));
 });
 
 describe('Z2: fixed vectors (independently computed)', () => {
@@ -703,7 +723,7 @@ describe('Z15: Phase 2A gates — quadratic extension challenges', () => {
     expect(equalFp2(addFp2(value, fp2(1n, 0n)), fp2(12n, 29n))).toBe(true);
   });
 
-  it('propagates every protocol and FRI challenge through the v2 proof wire', async () => {
+  it('Z19: propagates every protocol and FRI challenge through the v2 proof wire', async () => {
     const compiled = await compile(pythagorean);
     const trace = await prove(
       compiled,
@@ -757,7 +777,7 @@ describe('Z15: Phase 2A gates — quadratic extension challenges', () => {
   });
 });
 
-describe('Phase 2B/2C gates — bound lookups and multiset Sudoku', () => {
+describe('Z20: Phase 2B/2C gates — bound lookups and multiset Sudoku', () => {
   it('proves Plookup membership and rejects an out-of-table age', async () => {
     const compiled = await compile(age);
     const params = { n: compiled.n, blowup: 8, queries: 1, zk: false };
@@ -832,7 +852,7 @@ describe('Z16: Phase 2D gates — Poseidon workshop hash', () => {
   });
 });
 
-describe('Phase 2E gates — post-commitment grinding deterrent', () => {
+describe('Z16: Phase 2E gates — post-commitment grinding deterrent', () => {
   it('finds and checks transcript-bound SHA-256 work', async () => {
     const challenge = new Uint8Array(32).fill(7);
     const nonce = await findGrindingNonce(challenge, 6);

@@ -1,11 +1,13 @@
 /**
  * Circuit graph -> PLONK rows (a,b,c + selectors + σ) and witness generation.
- * M3.
+ * docs/PROTOCOL-SPEC.md §4.3, §5. M3.
  */
 import { P, add, mod, mul } from '../field';
 import type { Fp } from '../field';
 import { validate } from './ir';
 import type { Circuit, Gate } from './ir';
+
+export const MAX_TRACE_ROWS = 1 << 12;
 
 interface CompiledRow {
   a: number | null;
@@ -64,7 +66,7 @@ function topologicalOrder(circuit: Circuit): Gate[] {
 }
 
 function nextPowerOfTwo(value: number): number {
-  // v1 presets intentionally begin at 2^5 rows, even
+  // v1 presets intentionally begin at 2^5 rows (docs/PROTOCOL-SPEC.md §§4.2, 7), even
   // when their arithmetic rows would fit in a smaller domain.
   let n = 32;
   while (n < value) n *= 2;
@@ -148,6 +150,9 @@ function buildRows(circuit: Circuit): {
   }
 
   const n = nextPowerOfTwo(Math.max(rows.length, circuit.lookupTable?.length ?? 0));
+  if (n > MAX_TRACE_ROWS) {
+    throw new Error(`Circuit requires ${n} trace rows; the teaching limit is ${MAX_TRACE_ROWS}.`);
+  }
   while (rows.length < n) {
     rows.push({ a: null, b: null, c: null });
     qL.push(0n);
