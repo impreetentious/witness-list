@@ -36,7 +36,7 @@ import { lessons, type Lesson } from '@/course/lessons';
 
 type PresetId = 'pythagorean' | 'sudoku' | 'sudoku9' | 'mimc' | 'age' | 'canvas' | 'script';
 
-/** Default FRI query count — matches the teaching-scale readout. */
+/** Default FRI query count — matches docs/PROTOCOL-SPEC.md §4.7 / §4.11 teaching-scale readout. */
 const DEFAULT_QUERIES = 32;
 
 function parseCourseDeepLink(hash: string): { lessonId?: string; stage?: number } {

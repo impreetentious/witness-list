@@ -1,7 +1,7 @@
 /**
  * Goldilocks field F_p, p = 2^64 − 2^32 + 1. docs/PROTOCOL-SPEC.md §4.1.
  * IMPLEMENTED (scaffold anchor) — tested against independently computed vectors
- * (regenerable via tools/reference.py).
+ * (docs/PROTOCOL-SPEC.md §13, regenerable via tools/reference.py).
  *
  * BigInt throughout: correct-by-construction and fast enough at workshop sizes
  * (budget: LDE of 2^13 < 100 ms, measured at M1).
@@ -56,7 +56,7 @@ export function inv(a: Fp): Fp {
 
 /**
  * Montgomery batch inversion — one inv + 3(n−1) muls.
- * Used for DEEP quotient denominators.
+ * Used for DEEP quotient denominators (docs/PROTOCOL-SPEC.md §4.6 round 5).
  */
 export function batchInverse(xs: readonly Fp[]): Fp[] {
   const n = xs.length;
@@ -76,13 +76,13 @@ export function batchInverse(xs: readonly Fp[]): Fp[] {
   return out;
 }
 
-/** Generator of the multiplicative subgroup of order 2^k (k ≤ 32). */
+/** Generator of the multiplicative subgroup of order 2^k (k ≤ 32). docs/PROTOCOL-SPEC.md §4.1. */
 export function twoAdicRoot(k: number): Fp {
   if (k < 0 || k > TWO_ADICITY) throw new Error(`no 2^${k} root of unity`);
   return pow(GENERATOR, (P - 1n) >> BigInt(k));
 }
 
-/** Uniform field element from a seeded 64-bit draw with rejection. */
+/** Uniform field element from a seeded 64-bit draw with rejection (docs/PROTOCOL-SPEC.md §4.9). */
 export function fromU64Rejecting(draw: () => bigint): Fp {
   for (;;) {
     const x = draw();

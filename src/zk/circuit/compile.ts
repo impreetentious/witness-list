@@ -30,7 +30,7 @@ export interface CompiledCircuit {
   lookupMode: 'membership' | 'multiset';
   lookupDummy: Fp;
   lookupDummyTag: Fp;
-  /** σ over 3n slots; slot ids on H, k1·H, k2·H with k1=7, k2=49 */
+  /** σ over 3n slots; slot ids on H, k1·H, k2·H with k1=7, k2=49 (docs/PROTOCOL-SPEC.md §4.3) */
   sigma: Uint32Array;
   publicRows: number;
   digest: Uint8Array; // SHA-256 of canonical serialization, absorbed in round 0

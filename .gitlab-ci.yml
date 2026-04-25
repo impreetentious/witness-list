@@ -20,13 +20,18 @@ check:
   stage: check
   script:
     - npm ci --cache .npm --prefer-offline
+    # Production-scoped: the shipped export stays advisory-free. Consults the live
+    # advisory database, so it can turn red with no commit changing.
+    - npm audit --omit=dev --audit-level=high
     - npm run check:version
     - npm run typecheck
     - npm run lint
     - npm run check:gates
+    - npm run check:citations
     - npm run format:check
     - BASE_PATH="/$CI_PROJECT_NAME" npm run build
     - npm test
+    - npm run check:csp
     - npm run budget:bundle
     - npm run budget:performance
     - npx playwright install --with-deps chromium

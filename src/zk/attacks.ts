@@ -352,7 +352,7 @@ async function forgedGrindingProof(context: GrindingContext, nonce: number): Pro
  * A3 uses an actual forged proof, not a random counter. Each candidate FRI
  * polynomial agrees with the real DEEP values on exactly one of `blowup`
  * LDE cosets. With Q queries it can pass only when every derived index falls
- * in that selected coset: approximately (1/blowup)^Q.
+ * in that selected coset: approximately (1/blowup)^Q (docs/PROTOCOL-SPEC.md §4.11).
  */
 export async function grindChallenge(
   circuit: Circuit,

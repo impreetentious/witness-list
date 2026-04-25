@@ -1,7 +1,7 @@
 {
   "name": "witness-list",
   "private": true,
-  "version": "0.8.0",
+  "version": "0.8.1",
   "description": "Witness List — a zero-knowledge proof workshop. Build a claim, prove it, try to cheat.",
   "license": "MIT",
   "repository": {
@@ -19,6 +19,7 @@
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "check:gates": "node scripts/check-gate-coverage.mjs",
+    "check:citations": "node scripts/check-citations.mjs",
     "lint": "oxlint --deny-warnings .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",

@@ -33,7 +33,7 @@ Other boundaries, stated in the product as well as here:
 
 ## Run it
 
-Requires Node 22+, and a browser with BigInt and Web Workers — the prover runs off the main thread.
+Requires Node `>=22.22.1 <23` (see `.nvmrc`; `engine-strict` makes `npm ci` fail on a different version), and a browser with BigInt and Web Workers — the prover runs off the main thread.
 
 ```bash
 npm install
@@ -57,7 +57,7 @@ The negative suite is the load-bearing one: every canned attack in the app is th
 Static and client-side — proving and verifying happen in the visitor's browser. Nothing is deployed yet; both pipelines are committed and ready:
 
 - **GitHub Pages** — push to `main`; `.github/workflows/ci.yml` builds and deploys (enable Pages → Source: GitHub Actions once).
-- **GitLab Pages** — `.gitlab-ci.yml` builds and publishes on push to `main`. It is an unused mirror today: the repository has no GitLab remote, so this pipeline only becomes live once a GitLab project exists and is added as a remote.
+- **GitLab Pages** — `.gitlab-ci.yml` builds and publishes on push to `main`. The GitLab project exists and `gitlab/main` is in sync with `origin/main`, so this pipeline is live; publishing only needs Pages enabled on that project.
 
 Both set `BASE_PATH` for project-site subpaths; for a custom domain or root site, set it to `''` in the pipeline. Or `npm run build` and drop `out/` on any static host.
 
@@ -71,4 +71,4 @@ MIT — see [LICENSE](./LICENSE).
 
 ---
 
-**Version:** v0.8.0
+**Version:** v0.8.1

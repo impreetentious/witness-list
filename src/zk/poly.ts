@@ -65,7 +65,7 @@ export function polyDivRem(a: Poly, b: Poly): { q: Poly; r: Poly } {
   return { q: trim(quotient), r: remainder };
 }
 
-/** Z_H = x^n − 1; on the LDE coset it never vanishes. */
+/** Z_H = x^n − 1; on the LDE coset it never vanishes (docs/PROTOCOL-SPEC.md §4.2). */
 export function vanishing(n: number): Poly {
   if (!Number.isSafeInteger(n) || n < 1) throw new Error('vanishing: n must be positive');
   const out = Array.from<Fp>({ length: n + 1 }).fill(0n);

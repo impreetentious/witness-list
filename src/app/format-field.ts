@@ -1,6 +1,6 @@
 /**
  * Field-element display formatting for inspectors and live payloads.
- * Thin-space decimal grouping + hex for hover titles.
+ * Thin-space decimal grouping + hex for hover titles (docs/PROTOCOL-SPEC.md §6.5 polish).
  * UI-only — not part of the wire format or `src/zk/` kernel.
  */
 

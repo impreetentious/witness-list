@@ -26,7 +26,7 @@ export const pythagorean: Circuit = {
   publicOrder: [1],
 };
 
-/** Structured input panel spec: three integer fields, default 3,4,5. */
+/** Structured input panel spec (docs/PROTOCOL-SPEC.md §5): three integer fields, default 3,4,5. */
 export const pythagoreanInputs = {
   fields: [
     { wire: 2, label: 'a (private)', default: 3n },

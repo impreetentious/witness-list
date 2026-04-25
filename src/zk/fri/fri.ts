@@ -49,7 +49,7 @@ export function domainPoint(index: number, length: number, shift: Fp = GENERATOR
   return mul(shift, pow(twoAdicRoot(log2PowerOfTwo(length, 'FRI domain length')), BigInt(index)));
 }
 
-/** fold: L' (x²) = (L(x)+L(−x))/2 + β·(L(x)−L(−x))/(2x) */
+/** fold: L' (x²) = (L(x)+L(−x))/2 + β·(L(x)−L(−x))/(2x) — docs/PROTOCOL-SPEC.md §4.7 */
 export function foldLayer(_layer: Fp[], _beta: Fp, _domainShift: Fp): Fp[] {
   const { length } = _layer;
   if (length < 2 || (length & (length - 1)) !== 0) {

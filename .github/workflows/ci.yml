@@ -16,27 +16,37 @@ jobs:
   check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22.22.1
           cache: npm
       - run: npm ci
+      # Scoped to production dependencies: the shipped static export must stay
+      # advisory-free, while dev-only tooling advisories do not block. This step
+      # consults the live advisory database, so it can turn red without any commit
+      # changing — that is intended, and the fix is a dependency bump, not a revert.
+      - run: npm audit --omit=dev --audit-level=high
       - run: npm run check:version
       - run: npm run typecheck
       - run: npm run lint
       - run: npm run check:gates
+      # check:gates proves the kernels carry a citation; check:citations proves
+      # each citation points at a section that exists in the permanent spec.
+      - run: npm run check:citations
       - run: npm run format:check
       - run: npm run build
         env:
           # Project-site subpath. Override to '' for a custom domain or user/org site.
           BASE_PATH: /${{ github.event.repository.name }}
       - run: npm test
+      # After the build so it can scan the real export, not just the configs.
+      - run: npm run check:csp
       - run: npm run budget:bundle
       - run: npm run budget:performance
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa # v3.0.1
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         with:
           path: out
@@ -54,4 +64,4 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4.0.5

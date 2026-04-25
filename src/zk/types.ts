@@ -134,7 +134,7 @@ export interface TranscriptEntry {
 export interface ProofTrace {
   proof: AnyProof;
   transcript: TranscriptEntry[];
-  /** stage payloads keyed by player stage id */
+  /** stage payloads keyed by player stage id (docs/PROTOCOL-SPEC.md §6.2) */
   stages: Record<string, unknown>;
   /** quotient remainder per row — zero iff honest; the cheat-mode red rows */
   quotientRemainder: Array<Fp | Fp2>;
