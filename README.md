@@ -61,6 +61,13 @@ Static and client-side — proving and verifying happen in the visitor's browser
 
 Both set `BASE_PATH` for project-site subpaths; for a custom domain or root site, set it to `''` in the pipeline. Or `npm run build` and drop `out/` on any static host.
 
+Whatever host serves the export should send the response headers documented in
+[docs/STATIC-HOST-HEADERS.md](docs/STATIC-HOST-HEADERS.md) — in particular `worker-src 'self'`,
+without which the prover worker never starts. `vercel.json` and `serve.json` carry the same policy
+in the two formats hosts read, and `npm run check:csp` fails if they and the document ever
+disagree. Note that neither GitHub Pages nor GitLab Pages can set custom response headers, so on
+those hosts the policy is documentation rather than enforcement.
+
 ## Stack
 
 Next.js (static export) · React 19 · TypeScript (strict) · React Flow (circuit canvas) · CodeMirror 6 (Witness Script editor). The protocol kernel (`src/zk/`) is **dependency-free, hand-rolled TypeScript**: Goldilocks/Fp² arithmetic on BigInt, radix-2 NTT, SHA-256 and workshop Poseidon trees, PLONK copy/lookup grand products, and Fp² DEEP-FRI. The prover runs in a Web Worker and emits a full trace — which is what makes every step inspectable.
@@ -71,4 +78,4 @@ MIT — see [LICENSE](./LICENSE).
 
 ---
 
-**Version:** v0.8.1
+**Version:** v0.8.2

@@ -61,7 +61,12 @@ export function WitnessScriptEditor({ onUseScript }: WitnessScriptEditorProps) {
           witnessScriptLanguage,
           syntaxHighlighting(defaultHighlightStyle),
           EditorView.lineWrapping,
-          EditorView.contentAttributes.of({ 'aria-labelledby': 'script-title' }),
+          // CodeMirror renders its editable surface as a bare
+          // `<div role="textbox" contenteditable>`, which has no accessible name
+          // of its own — WCAG 2.1 4.1.2, and axe reports it as serious. The
+          // section heading names the section, not this control, so the textbox
+          // gets its own label rather than borrowing one.
+          EditorView.contentAttributes.of({ 'aria-label': 'Witness script source' }),
           EditorView.updateListener.of((update) => {
             if (!update.docChanged) return;
             const next = update.state.doc.toString();
