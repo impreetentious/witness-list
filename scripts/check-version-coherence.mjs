@@ -9,11 +9,11 @@ const pkg = JSON.parse(read('package.json'));
 const version = pkg.version;
 const errors = [];
 const EXPECTED = {
-  nvmrc: '22.22.1',
-  engines: '>=22.22.1 <23',
+  nvmrc: '22.22.2',
+  engines: '>=22.22.2 <23',
   workflow: '.github/workflows/ci.yml',
-  ciNode: '22.22.1',
-  gitlabImage: 'node:22.22.1',
+  ciNode: '22.22.2',
+  gitlabImage: 'node:22.22.2',
 };
 
 function markerVersion(file) {

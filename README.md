@@ -33,7 +33,7 @@ Other boundaries, stated in the product as well as here:
 
 ## Run it
 
-Requires Node `>=22.22.1 <23` (see `.nvmrc`; `engine-strict` makes `npm ci` fail on a different version), and a browser with BigInt and Web Workers — the prover runs off the main thread.
+Requires Node `>=22.22.2 <23` (see `.nvmrc`; `engine-strict` makes `npm ci` fail on a different version), and a browser with BigInt and Web Workers — the prover runs off the main thread.
 
 ```bash
 npm ci
@@ -91,4 +91,4 @@ MIT — see [LICENSE](./LICENSE).
 
 ---
 
-**Version:** v0.9.1
+**Version:** v0.9.2

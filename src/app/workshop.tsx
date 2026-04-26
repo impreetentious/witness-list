@@ -358,6 +358,10 @@ export function Workshop() {
       setTrace(result.trace);
       setChecks(result.result.checks);
       setProgress(undefined);
+      if (!result.result.ok) {
+        setError('The generated proof failed local verification. Inspect V1–V7 before sharing it.');
+        return;
+      }
       setSeed((current) => current + 1);
       setShareStatus(
         proofZk
@@ -439,7 +443,7 @@ export function Workshop() {
       const workPerAttempt = 2 ** grindingBits;
       const projectedWork = result.attempts * workPerAttempt;
       setAttackStatus(
-        `A3 used the same malicious prover as CI: ${result.succeeded ? 'a forged Q=1 proof passed' : 'no forged proof passed'} after ${result.attempts} query-fishing attempts. At Q=1 its selected-coset strategy succeeds about once per eight attempts. With the selected 2^${grindingBits} work factor, replaying those attempts would require roughly ${projectedWork.toLocaleString()} nonce trials instead of ${result.attempts}.`,
+        `A3's selected-coset prover ${result.succeeded ? 'passed a forged Q=1 proof' : 'did not pass a forged proof'} after ${result.attempts} query-fishing attempts. At Q=1 the strategy succeeds about once per eight attempts. With the selected 2^${grindingBits} work factor, replaying those attempts would require roughly ${projectedWork.toLocaleString()} nonce trials instead of ${result.attempts}.`,
       );
       setProgress(undefined);
     } catch (caught) {
@@ -481,7 +485,7 @@ export function Workshop() {
   return (
     <div className="workshop">
       <header className="workshop-hero">
-        <p className="eyebrow">Witness List · v1 workshop</p>
+        <p className="eyebrow">Witness List · zero-knowledge workshop</p>
         <h1>Write a claim, prove it, try to cheat.</h1>
         <p>
           Start with a five-line Witness Script or a visual circuit. Every path runs in this

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { FieldElement } from '@/app/field-element';
 import {
   formatFieldDecimal,
@@ -109,7 +109,6 @@ type LiveStages = {
   witness?: { a: bigint[]; b: bigint[]; c: bigint[] };
   wirePolynomials?: { a: bigint[]; b: bigint[]; c: bigint[] };
   grandProduct?: { partials: Array<bigint | Fp2> };
-  quotient?: { chunks: Array<Array<bigint | Fp2>> };
   lookupGrandProduct?: {
     mode: 'membership' | 'multiset';
     partials: Fp2[];
@@ -317,7 +316,7 @@ export function ProtocolPlayer({
     <section className="protocol-player" aria-labelledby="player-title">
       <div className="player-heading">
         <div>
-          <p className="eyebrow">M7 protocol player</p>
+          <p className="eyebrow">Protocol player</p>
           <h2 id="player-title">Walk the proof, one exact operation at a time</h2>
         </div>
         <button type="button" onClick={onRun} disabled={running}>
@@ -489,6 +488,7 @@ function TraceInspector({
     typeof value === 'bigint' ? value !== 0n : value.c0 !== 0n || value.c1 !== 0n,
   );
   const [page, setPage] = useState(firstBadRow < 0 ? 0 : Math.floor(firstBadRow / pageSize));
+  const scrollRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (firstBadRow >= 0) setPage(Math.floor(firstBadRow / pageSize));
   }, [firstBadRow]);
@@ -518,7 +518,21 @@ function TraceInspector({
           </button>
         </div>
       )}
-      <div className="trace-scroll">
+      <div ref={scrollRef} className="trace-scroll" role="region" aria-label="Witness trace table">
+        <div className="trace-scroll-actions">
+          <button type="button" onClick={() => scrollRef.current?.scrollBy({ top: -160 })}>
+            Scroll up
+          </button>
+          <button type="button" onClick={() => scrollRef.current?.scrollBy({ top: 160 })}>
+            Scroll down
+          </button>
+          <button type="button" onClick={() => scrollRef.current?.scrollBy({ left: -240 })}>
+            Scroll left
+          </button>
+          <button type="button" onClick={() => scrollRef.current?.scrollBy({ left: 240 })}>
+            Scroll right
+          </button>
+        </div>
         <table>
           <thead>
             <tr>

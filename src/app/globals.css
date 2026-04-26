@@ -279,36 +279,13 @@ select {
   margin: 1rem 0 -1rem;
 }
 
-.scaffold {
-  min-height: 100vh;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  text-align: center;
-  padding: 2rem;
-}
-
-.scaffold h1 {
-  margin: 0;
-  font-size: 2rem;
-  letter-spacing: -0.02em;
-}
-
-.scaffold p {
-  margin: 0;
-  max-width: 44ch;
-}
-
 .mono {
   font-family: var(--font-mono);
   font-size: 0.8rem;
-  opacity: 0.6;
+  opacity: 0.68;
 }
 
-.m4-preview,
-.m5-preview {
+.m4-preview {
   width: min(100%, 46rem);
   margin-top: 2rem;
   border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
@@ -317,13 +294,11 @@ select {
 }
 
 .m4-preview h2,
-.m4-preview h3,
-.m5-preview h2 {
+.m4-preview h3 {
   margin: 0.25rem 0 0.75rem;
 }
 
-.m4-preview h2,
-.m5-preview h2 {
+.m4-preview h2 {
   font-size: 1.25rem;
 }
 
@@ -347,26 +322,6 @@ select {
   cursor: pointer;
   font: inherit;
   padding: 0.65rem 0.9rem;
-}
-
-.m5-preview button {
-  border: 1px solid var(--accent);
-  background: var(--accent);
-  color: white;
-  cursor: pointer;
-  font: inherit;
-  padding: 0.65rem 0.9rem;
-}
-
-.m5-preview button:disabled {
-  cursor: not-allowed;
-  opacity: 0.5;
-}
-
-.preview-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
 }
 
 .caveat {
@@ -447,8 +402,7 @@ select {
   max-width: 62ch;
 }
 
-.canvas-actions,
-.preview-actions {
+.canvas-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
@@ -518,6 +472,10 @@ select {
 
 .flow-shell .react-flow {
   background: color-mix(in srgb, var(--paper) 90%, var(--accent) 10%);
+}
+
+.flow-shell .react-flow__attribution a {
+  color: var(--ink);
 }
 
 .gate-card {
@@ -699,6 +657,23 @@ select {
 .trace-scroll {
   max-height: 18rem;
   overflow: auto;
+}
+
+.trace-scroll-actions {
+  background: var(--paper);
+  display: flex;
+  gap: 0.35rem;
+  left: 0;
+  padding: 0.25rem;
+  position: sticky;
+  top: 0;
+  width: max-content;
+  z-index: 1;
+}
+
+.trace-scroll-actions button {
+  font-size: 0.68rem;
+  padding: 0.25rem 0.45rem;
 }
 
 .trace-scroll table {

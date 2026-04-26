@@ -3,7 +3,7 @@
 # https://<namespace>.gitlab.io/<project>/ (BASE_PATH set accordingly).
 # For a custom domain or user/group site, set BASE_PATH: '' below.
 
-image: node:22.22.1
+image: node:22.22.2
 
 cache:
   key:
