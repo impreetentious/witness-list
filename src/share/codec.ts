@@ -4,6 +4,7 @@
  * fallback. docs/PROTOCOL-SPEC.md §8, gate Z14.
  */
 import type { Circuit, Gate, GateOp } from '../zk/circuit/ir';
+import { P } from '../zk/field';
 import type { Fp } from '../zk/field';
 import { fp2 } from '../zk/fp2';
 import type { Fp2 } from '../zk/fp2';
@@ -112,6 +113,8 @@ interface EncodedPayload {
 }
 
 const base64UrlAlphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+const MAX_ENCODED_CHARACTERS = 4_000_000;
+const MAX_DECOMPRESSED_BYTES = 8_000_000;
 
 function bytesToBase64Url(bytes: Uint8Array): string {
   let output = '';
@@ -164,7 +167,9 @@ function decodePath(path: EncodedPath): MerklePath {
   if (
     !Number.isSafeInteger(path.leafIndex) ||
     path.leafIndex < 0 ||
-    !Array.isArray(path.siblings)
+    path.leafIndex > 0xffffffff ||
+    !Array.isArray(path.siblings) ||
+    path.siblings.length > 32
   ) {
     throw new Error('invalid Merkle path');
   }
@@ -225,7 +230,9 @@ function encodeQuery(query: QueryOpening): EncodedQuery {
 function decodeFp(value: string): Fp {
   if (!/^(0|[1-9]\d*)$/.test(value))
     throw new Error('field element is not an unsigned decimal integer');
-  return BigInt(value);
+  const decoded = BigInt(value);
+  if (decoded >= P) throw new Error('field element is outside the canonical field range');
+  return decoded;
 }
 
 function decodeFp2(value: EncodedFp2): Fp2 {
@@ -437,6 +444,14 @@ function decodePayload(encoded: EncodedPayload): SharePayload {
   ) {
     throw new Error('invalid circuit provenance');
   }
+  const publicInputs = encoded.publicInputs.map(decodeFp);
+  if (
+    publicInputs.length !== encoded.circuit.publicOrder.length ||
+    publicInputs.length !== proof.publicInputs.length ||
+    publicInputs.some((value, index) => value !== proof.publicInputs[index])
+  ) {
+    throw new Error('shared public inputs do not match the proof statement');
+  }
   return {
     circuit: {
       name: encoded.circuit.name,
@@ -453,7 +468,7 @@ function decodePayload(encoded: EncodedPayload): SharePayload {
         ? {}
         : { lookupTableTags: encoded.circuit.lookupTableTags.map(decodeFp) }),
     },
-    publicInputs: encoded.publicInputs.map(decodeFp),
+    publicInputs,
     proof,
   };
 }
@@ -490,22 +505,48 @@ async function decompress(bytes: Uint8Array): Promise<Uint8Array> {
   if (typeof DecompressionStream === 'undefined')
     throw new Error('this environment cannot decode compressed share URLs');
   const stream = new DecompressionStream('deflate-raw');
-  // Begin consuming before writing for the same backpressure reason as encode.
-  const plain = new Response(stream.readable)
-    .arrayBuffer()
-    .then((buffer) => new Uint8Array(buffer));
+  // Begin consuming before writing for the same backpressure reason as encode,
+  // and stop before an attacker-controlled compressed fragment can expand
+  // without bound in the browser.
+  const plain = (async (): Promise<Uint8Array> => {
+    const reader = stream.readable.getReader();
+    const chunks: Uint8Array[] = [];
+    let total = 0;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > MAX_DECOMPRESSED_BYTES) {
+        await reader.cancel();
+        throw new Error('decompressed share payload exceeds the size limit');
+      }
+      chunks.push(value);
+    }
+    const output = new Uint8Array(total);
+    let offset = 0;
+    for (const chunk of chunks) {
+      output.set(chunk, offset);
+      offset += chunk.byteLength;
+    }
+    return output;
+  })();
   const writer = stream.writable.getWriter();
   const owned = new Uint8Array(bytes.length);
   owned.set(bytes);
-  await writer.write(owned);
-  await writer.close();
-  return plain;
+  const writing = (async (): Promise<void> => {
+    await writer.write(owned);
+    await writer.close();
+  })();
+  const [output] = await Promise.all([plain, writing]);
+  return output;
 }
 
 /** Encode a fragment. `compressPayload=false` explicitly produces the #pu fallback. */
 export async function encodeShare(payload: SharePayload, compressPayload = true): Promise<string> {
   const json = JSON.stringify(encodePayload(payload));
   const plain = new TextEncoder().encode(json);
+  if (plain.byteLength > MAX_DECOMPRESSED_BYTES)
+    throw new Error('share payload exceeds the size limit');
   const compressed = compressPayload ? await compress(plain) : undefined;
   return compressed === undefined
     ? `#pu=${bytesToBase64Url(plain)}`
@@ -513,10 +554,14 @@ export async function encodeShare(payload: SharePayload, compressPayload = true)
 }
 
 export async function decodeShare(fragment: string): Promise<SharePayload> {
+  if (fragment.length > MAX_ENCODED_CHARACTERS)
+    throw new Error('encoded share payload exceeds the size limit');
   const match = /^#(p|pu)=([A-Za-z0-9_-]+)$/.exec(fragment);
   if (match === null) throw new Error('share URL needs a #p= or #pu= payload');
   const bytes = base64UrlToBytes(match[2]!);
   const plain = match[1] === 'p' ? await decompress(bytes) : bytes;
+  if (plain.byteLength > MAX_DECOMPRESSED_BYTES)
+    throw new Error('share payload exceeds the size limit');
   let encoded: unknown;
   try {
     encoded = JSON.parse(new TextDecoder().decode(plain));

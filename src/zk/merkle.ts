@@ -1,5 +1,5 @@
 /**
- * SHA-256 Merkle tree over LDE evaluations (WebCrypto, async). docs/PROTOCOL-SPEC.md §4.5. M2.
+ * SHA-256 Merkle tree over LDE evaluations (WebCrypto, async). docs/PROTOCOL-SPEC.md §4.5.
  * Leaf i = H(domainSep ‖ i ‖ eval bytes LE). Wire polys share composite leaves (a‖b‖c).
  */
 import type { Fp } from './field';
@@ -120,8 +120,19 @@ export async function verifyPath(
   leaf: Fp[],
   path: MerklePath,
   domainSep: string,
+  leafCount?: number,
 ): Promise<boolean> {
   if (!Number.isSafeInteger(path.leafIndex) || path.leafIndex < 0 || root.bytes.length !== 32) {
+    return false;
+  }
+  if (
+    leafCount !== undefined &&
+    (!Number.isSafeInteger(leafCount) ||
+      leafCount < 1 ||
+      (leafCount & (leafCount - 1)) !== 0 ||
+      path.leafIndex >= leafCount ||
+      path.siblings.length !== Math.log2(leafCount))
+  ) {
     return false;
   }
   let current = await hashLeaf(leaf, path.leafIndex, domainSep);

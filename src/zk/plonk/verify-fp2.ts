@@ -27,6 +27,7 @@ import { domainPoint } from '../fri/fri';
 import { deepCompositionAtFp2, foldPairFp2 } from '../fri/fri-fp2';
 import { encodeGrindingNonce, verifyGrindingNonce } from '../grinding';
 import { interpolate } from '../ntt';
+import { paramsAreSupported } from './params';
 
 function paramsBytes(proof: Proof): Uint8Array {
   const bits = proof.params.grindingBits ?? 0;
@@ -95,6 +96,15 @@ async function squeezeZeta(
 }
 
 export async function verifyFp2(circuit: CompiledCircuit, proof: Proof): Promise<VerifyResult> {
+  const baseParamsOk = paramsAreSupported(proof.params, circuit.n);
+  if (!baseParamsOk) {
+    const v7: CheckResult = {
+      id: 'V7',
+      ok: false,
+      detail: 'Protocol-v2 parameters are outside the supported range.',
+    };
+    return failure(v7, 'Transcript replay cannot start: protocol-v2 parameters are unsupported.');
+  }
   const lookup = hasLookups(circuit);
   const chunks = quotientChunkCount(proof.params);
   const quotientLabels = quotientChunkLabels(chunks);
@@ -131,9 +141,7 @@ export async function verifyFp2(circuit: CompiledCircuit, proof: Proof): Promise
         proof.grindingNonce! <= 0xffffffff);
   const paramsOk =
     proof.version === 2 &&
-    proof.params.n === circuit.n &&
-    proof.params.blowup > 0 &&
-    (proof.params.blowup & (proof.params.blowup - 1)) === 0 &&
+    baseParamsOk &&
     proof.publicInputs.length === circuit.publicRows &&
     proof.publicInputs.every((value) => value >= 0n && value < P) &&
     proof.tRoots.length === chunks &&
@@ -408,7 +416,11 @@ async function verifyMerkleQueries(
     for (const [label, arity, leafIndex, root, domain] of roots) {
       const leaf = canonicalLeaf(query, label, arity),
         path = pathAt(query, label, leafIndex);
-      if (leaf === undefined || path === undefined || !(await verifyPath(root, leaf, path, domain)))
+      if (
+        leaf === undefined ||
+        path === undefined ||
+        !(await verifyPath(root, leaf, path, domain, size))
+      )
         return {
           id: 'V3',
           ok: false,
@@ -433,12 +445,14 @@ async function verifyMerkleQueries(
           [opening.at.c0, opening.at.c1],
           opening.atPath,
           `fri2-${layer}`,
+          layerSize,
         )) ||
         !(await verifyPath(
           proof.friLayerRoots[layer]!,
           [opening.sibling.c0, opening.sibling.c1],
           opening.siblingPath,
           `fri2-${layer}`,
+          layerSize,
         ))
       )
         return {
@@ -459,6 +473,7 @@ async function verifyMerkleQueries(
         [final.value.c0, final.value.c1],
         final.path,
         `fri2-${finalLayer}`,
+        size >> finalLayer,
       ))
     )
       return {

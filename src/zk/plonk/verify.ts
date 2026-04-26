@@ -1,7 +1,7 @@
 /**
  * Checklist-shaped verifier: returns per-check results (V1–V7), never a bare
  * boolean — the checklist is both the UI and the negative-test oracle.
- * docs/PROTOCOL-SPEC.md §4.8. M4 (V1–V2) + M5 (V3–V7).
+ * docs/PROTOCOL-SPEC.md §4.8.
  */
 import { GENERATOR, P, add, mul, pow, sub } from '../field';
 import type { Fp } from '../field';
@@ -23,6 +23,7 @@ import { deepCompositionAt, domainPoint, foldPair } from '../fri/fri';
 import { friInitialDegreeBound, quotientChunkCount, quotientChunkLabels } from './chunks';
 import { encodeGrindingNonce, verifyGrindingNonce } from '../grinding';
 import { verifyFp2 } from './verify-fp2';
+import { paramsAreSupported } from './params';
 
 function paramsBytes(proof: ProofV1): Uint8Array {
   const grindingBits = proof.params.grindingBits ?? 0;
@@ -55,9 +56,7 @@ export async function verifyM4(circuit: CompiledCircuit, proof: ProofV1): Promis
   const checks: CheckResult[] = [];
   const paramsOk =
     proof.version === 1 &&
-    proof.params.n === circuit.n &&
-    proof.params.blowup > 0 &&
-    (proof.params.blowup & (proof.params.blowup - 1)) === 0 &&
+    paramsAreSupported(proof.params, circuit.n) &&
     !proof.params.zk &&
     proof.publicInputs.length === circuit.publicRows;
   checks.push({
@@ -178,15 +177,21 @@ function quotientAtZeta(openings: Map<string, Fp>, labels: readonly string[], ze
   return value;
 }
 
-/**
- * Full verifier entry point. Until M5 lands, it deliberately rejects an M4
- * proof after surfacing its real V1/V2 result: no one can mistake it for sound.
- */
+/** Full verifier entry point, dispatching by protocol wire version. */
 export async function verify(circuit: CompiledCircuit, proof: AnyProof): Promise<VerifyResult> {
   return proof.version === 2 ? verifyFp2(circuit, proof) : verifyV1(circuit, proof);
 }
 
 async function verifyV1(circuit: CompiledCircuit, proof: ProofV1): Promise<VerifyResult> {
+  const baseParamsOk = paramsAreSupported(proof.params, circuit.n);
+  if (!baseParamsOk) {
+    const v7: CheckResult = {
+      id: 'V7',
+      ok: false,
+      detail: 'Parameters are outside the supported protocol range.',
+    };
+    return failedFullTranscript(v7, 'Transcript replay cannot start: parameters are unsupported.');
+  }
   const expectedChunks = quotientChunkCount(proof.params);
   const quotientLabels = quotientChunkLabels(expectedChunks);
   const requiredOpenings = ['a', 'b', 'c', 's-a', 's-b', 's-c', 'z', 'z-omega', ...quotientLabels];
@@ -203,9 +208,7 @@ async function verifyV1(circuit: CompiledCircuit, proof: ProofV1): Promise<Verif
         proof.grindingNonce! <= 0xffffffff);
   const paramsOk =
     proof.version === 1 &&
-    proof.params.n === circuit.n &&
-    proof.params.blowup > 0 &&
-    (proof.params.blowup & (proof.params.blowup - 1)) === 0 &&
+    baseParamsOk &&
     proof.publicInputs.length === circuit.publicRows &&
     proof.tRoots.length === expectedChunks &&
     proof.friLayerRoots.length === expectedRoots &&
@@ -445,17 +448,19 @@ async function verifyMerkleQueries(
     checks.push([
       wires !== undefined &&
         wirePath !== undefined &&
-        (await verifyPath(proof.wiresRoot, wires, wirePath, 'wires')),
+        (await verifyPath(proof.wiresRoot, wires, wirePath, 'wires', size)),
       'wire',
     ]);
     checks.push([
-      z !== undefined && zPath !== undefined && (await verifyPath(proof.zRoot, z, zPath, 'z')),
+      z !== undefined &&
+        zPath !== undefined &&
+        (await verifyPath(proof.zRoot, z, zPath, 'z', size)),
       'Z',
     ]);
     checks.push([
       zOmega !== undefined &&
         zOmegaPath !== undefined &&
-        (await verifyPath(proof.zRoot, zOmega, zOmegaPath, 'z')),
+        (await verifyPath(proof.zRoot, zOmega, zOmegaPath, 'z', size)),
       'Z(ωx)',
     ]);
     for (const [chunk, label] of quotientChunkLabels(proof.tRoots.length).entries()) {
@@ -464,7 +469,7 @@ async function verifyMerkleQueries(
       checks.push([
         value !== undefined &&
           path !== undefined &&
-          (await verifyPath(proof.tRoots[chunk]!, value, path, label)),
+          (await verifyPath(proof.tRoots[chunk]!, value, path, label, size)),
         label,
       ]);
     }
@@ -480,12 +485,19 @@ async function verifyMerkleQueries(
       checks.push([
         pathsPresent &&
           allFieldElements([fri.at, fri.sibling]) &&
-          (await verifyPath(proof.friLayerRoots[layer]!, [fri.at], fri.atPath, `fri-${layer}`)) &&
+          (await verifyPath(
+            proof.friLayerRoots[layer]!,
+            [fri.at],
+            fri.atPath,
+            `fri-${layer}`,
+            layerSize,
+          )) &&
           (await verifyPath(
             proof.friLayerRoots[layer]!,
             [fri.sibling],
             fri.siblingPath,
             `fri-${layer}`,
+            layerSize,
           )),
         `FRI layer ${layer}`,
       ]);
@@ -502,6 +514,7 @@ async function verifyMerkleQueries(
           [final.value],
           final.path,
           `fri-${proof.friLayerRoots.length - 1}`,
+          size >> (proof.friLayerRoots.length - 1),
         )),
       'final FRI layer',
     ]);
