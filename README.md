@@ -36,28 +36,41 @@ Other boundaries, stated in the product as well as here:
 Requires Node `>=22.22.1 <23` (see `.nvmrc`; `engine-strict` makes `npm ci` fail on a different version), and a browser with BigInt and Web Workers — the prover runs off the main thread.
 
 ```bash
-npm install
+npm ci
 npm run dev        # local dev server on http://localhost:3000
 ```
 
 ## Verify
 
 ```bash
+npm run check:version
 npm run typecheck
-npm test           # algebra laws, protocol gates, negative (attack) suite
 npm run lint
+npm run check:gates
+npm run check:citations
 npm run format:check
-npm run build      # static export in out/
+BASE_PATH=/witness-list npm run build  # static export in out/
+npm test                            # algebra, protocol, and attack suites
+npm run check:csp
+npm run budget:bundle
+npm run budget:performance
+BASE_PATH=/witness-list npm run test:e2e
 ```
 
 The negative suite is the load-bearing one: every canned attack in the app is the same function the tests run, so a soundness regression fails CI rather than quietly shipping. `tools/reference.py` is an independent Python implementation of the field, NTT, MiMC, and workshop Poseidon parameterization used to cross-check fixtures.
 
+The browser suite includes functional, accessibility, and performance checks. Install its browser
+once with `npx playwright install chromium`. Set `BASE_PATH` to the deployment subpath, or leave it
+unset for a root deployment. After building, `npm start` serves the static `out/` export locally.
+
 ## Deploy
 
-Static and client-side — proving and verifying happen in the visitor's browser. Nothing is deployed yet; both pipelines are committed and ready:
+Static and client-side — proving and verifying happen in the visitor's browser. The repository
+contains equivalent deployment pipelines for two project-site hosts:
 
-- **GitHub Pages** — push to `main`; `.github/workflows/ci.yml` builds and deploys (enable Pages → Source: GitHub Actions once).
-- **GitLab Pages** — `.gitlab-ci.yml` builds and publishes on push to `main`. The GitLab project exists and `gitlab/main` is in sync with `origin/main`, so this pipeline is live; publishing only needs Pages enabled on that project.
+- **GitHub Pages** — `.github/workflows/ci.yml` validates every change and deploys successful
+  builds from `main` when Pages uses GitHub Actions as its source.
+- **GitLab Pages** — `.gitlab-ci.yml` runs the same checks and publishes successful `main` builds.
 
 Both set `BASE_PATH` for project-site subpaths; for a custom domain or root site, set it to `''` in the pipeline. Or `npm run build` and drop `out/` on any static host.
 
@@ -78,4 +91,4 @@ MIT — see [LICENSE](./LICENSE).
 
 ---
 
-**Version:** v0.9.0
+**Version:** v0.9.1

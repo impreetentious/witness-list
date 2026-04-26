@@ -6,10 +6,8 @@
  * links, and above all a ZK prover Web Worker whose script URL no longer
  * resolves — is invisible to a dev server running at the root.
  *
- * Ported from limit-state/scripts/serve-static.mjs, which solved the identical
- * deployment shape.
  */
-import { createReadStream, existsSync, statSync } from 'node:fs';
+import { createReadStream, existsSync, readFileSync, statSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { extname, join, normalize, resolve, sep } from 'node:path';
 
@@ -17,6 +15,10 @@ const root = resolve(process.argv[2] ?? 'out');
 const port = Number.parseInt(process.env.PORT ?? '3011', 10);
 const host = process.env.HOST ?? '127.0.0.1';
 const basePath = (process.env.BASE_PATH ?? '').replace(/\/$/, '');
+const serveConfig = JSON.parse(readFileSync('serve.json', 'utf8'));
+const configuredHeaders = Object.fromEntries(
+  (serveConfig.headers?.[0]?.headers ?? []).map(({ key, value }) => [key, value]),
+);
 
 const types = new Map([
   ['.css', 'text/css; charset=utf-8'],
@@ -33,7 +35,12 @@ const types = new Map([
 ]);
 
 function resolveRequest(pathname) {
-  const decoded = decodeURIComponent(pathname);
+  let decoded;
+  try {
+    decoded = decodeURIComponent(pathname);
+  } catch {
+    return null;
+  }
   const candidate = normalize(join(root, decoded));
   if (candidate !== root && !candidate.startsWith(`${root}${sep}`)) return null;
 
@@ -55,12 +62,12 @@ const server = createServer((request, response) => {
   let pathname = url.pathname;
   if (basePath) {
     if (pathname === '/') {
-      response.writeHead(302, { Location: `${basePath}/` });
+      response.writeHead(302, { ...configuredHeaders, Location: `${basePath}/` });
       response.end();
       return;
     }
     if (pathname !== basePath && !pathname.startsWith(`${basePath}/`)) {
-      response.writeHead(404);
+      response.writeHead(404, configuredHeaders);
       response.end('Not found');
       return;
     }
@@ -69,12 +76,13 @@ const server = createServer((request, response) => {
   const file = resolveRequest(pathname);
 
   if (!file || !existsSync(file)) {
-    response.writeHead(404);
+    response.writeHead(404, configuredHeaders);
     response.end('Not found');
     return;
   }
 
   response.writeHead(200, {
+    ...configuredHeaders,
     'Content-Type': types.get(extname(file)) ?? 'application/octet-stream',
   });
   createReadStream(file).pipe(response);

@@ -35,7 +35,7 @@ check:
     - npm run budget:bundle
     - npm run budget:performance
     - npx playwright install --with-deps chromium
-    - npm run test:e2e
+    - BASE_PATH="/$CI_PROJECT_NAME" npm run test:e2e
 
 pages:
   stage: deploy

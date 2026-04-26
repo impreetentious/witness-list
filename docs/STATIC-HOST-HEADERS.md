@@ -36,7 +36,7 @@ Permissions-Policy: camera=(), geolocation=(), microphone=(), payment=(), usb=()
 - **`script-src`/`style-src` inline allowances** — required by the framework's static bootstrap and
   its generated critical styles. They permit no remote origin.
 - **`frame-ancestors 'none'` plus `X-Frame-Options: DENY`** — there is no embeddable surface. Both
-  are set because some hosts and older agents honour only one.
+  are set because some hosts and older browsers honour only one.
 
 ## Applying this on Pages
 
@@ -54,5 +54,5 @@ gains an off-origin reference. Update all three together, then re-run `npm run b
 test:e2e` — the suite serves the built export under the deployed `BASE_PATH`, so a policy that
 breaks the prover worker fails the gate rather than shipping.
 
-Host-specific tuning and verification of the deployed response headers remain an owner step at
-deploy time; nothing here has been checked against a live host.
+Verify the effective response headers against the public URL after every deployment; repository
+configuration alone cannot prove what a live host serves.
