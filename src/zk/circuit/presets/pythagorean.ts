@@ -17,7 +17,7 @@ export const pythagorean: Circuit = {
     { id: 6, op: 'mul', inputs: [1, 1], pos: { x: 380, y: 160 } }, // c²
     { id: 7, op: 'add', inputs: [4, 5], pos: { x: 300, y: 100 } }, // a²+b²
     // a²+b² − c² = 0, expressed as add with negated input handled by compiler
-    // sugar: assert0(sub(7,6)). v1 IR keeps only add/mul, so:
+    // Sugar: assert0(sub(7,6)). The IR keeps only add/mul, so:
     { id: 8, op: 'mul', inputs: [6, 9], pos: { x: 460, y: 100 } }, // c²·(−1)
     { id: 9, op: 'const', inputs: [], value: -1n, pos: { x: 460, y: 180 } }, // −1 (reduced mod p at compile)
     { id: 10, op: 'add', inputs: [7, 8], pos: { x: 560, y: 100 } }, // a²+b²−c²

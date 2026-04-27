@@ -1,6 +1,6 @@
 /**
  * Circuit graph -> PLONK rows (a,b,c + selectors + σ) and witness generation.
- * docs/PROTOCOL-SPEC.md §4.3, §5. M3.
+ * docs/PROTOCOL-SPEC.md §4.3, §5.
  */
 import { P, add, mod, mul } from '../field';
 import type { Fp } from '../field';
@@ -66,7 +66,7 @@ function topologicalOrder(circuit: Circuit): Gate[] {
 }
 
 function nextPowerOfTwo(value: number): number {
-  // v1 presets intentionally begin at 2^5 rows (docs/PROTOCOL-SPEC.md §§4.2, 7), even
+  // Presets intentionally begin at 2^5 rows (docs/PROTOCOL-SPEC.md §§4.2, 7), even
   // when their arithmetic rows would fit in a smaller domain.
   let n = 32;
   while (n < value) n *= 2;

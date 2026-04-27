@@ -129,7 +129,7 @@ function parseGateId(id: string): number {
   return parsed;
 }
 
-function canvasCircuit(nodes: GateNode[], edges: Edge[], template: Circuit): Circuit {
+function canvasCircuit(nodes: GateNode[], edges: Edge[], template?: Circuit): Circuit {
   const edgeByTarget = new Map<string, Map<number, Edge>>();
   for (const edge of edges) {
     const input = /^input-(\d+)$/.exec(edge.targetHandle ?? '');
@@ -167,12 +167,24 @@ function canvasCircuit(nodes: GateNode[], edges: Edge[], template: Circuit): Cir
       pos: { x: Math.round(node.position.x), y: Math.round(node.position.y) },
     };
   });
+  const publicIds = new Set(
+    nodes.filter((node) => node.data.op === 'pub').map((node) => parseGateId(node.id)),
+  );
+  const templatePublicOrder = (template?.publicOrder ?? []).filter((id) => publicIds.has(id));
+  const templatePublicIds = new Set(templatePublicOrder);
+  const publicOrder = [
+    ...templatePublicOrder,
+    ...nodes
+      .filter((node) => node.data.op === 'pub')
+      .map((node) => parseGateId(node.id))
+      .filter((id) => !templatePublicIds.has(id)),
+  ];
   return {
     name: 'Canvas circuit',
     gates,
-    publicOrder: nodes.filter((node) => node.data.op === 'pub').map((node) => parseGateId(node.id)),
+    publicOrder,
     ...(nodes.some((node) => node.data.op === 'lookup')
-      ? template.lookupTable === undefined
+      ? template?.lookupTable === undefined
         ? { lookupTable: Array.from({ length: 16 }, (_, value) => BigInt(value)) }
         : {
             lookupTable: template.lookupTable.slice(),
@@ -194,6 +206,7 @@ export function CircuitCanvas({ circuit = pythagorean, onUseCircuit }: CircuitCa
   const initial = fromCircuit(circuit);
   const [nodes, setNodes, onNodesChange] = useNodesState<GateNode>(initial.nodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>(initial.edges);
+  const [lookupTemplate, setLookupTemplate] = useState<Circuit | undefined>(circuit);
   const [selectedId, setSelectedId] = useState<string>();
   const [compileStatus, setCompileStatus] = useState<string>(
     'Pythagorean preset loaded. You can move gates, reconnect wires, or start empty.',
@@ -203,6 +216,7 @@ export function CircuitCanvas({ circuit = pythagorean, onUseCircuit }: CircuitCa
     const next = fromCircuit(circuit);
     setNodes(next.nodes);
     setEdges(next.edges);
+    setLookupTemplate(circuit);
     setSelectedId(undefined);
     setCompileStatus(`${circuit.name} loaded on the canvas.`);
   }, [circuit, setEdges, setNodes]);
@@ -258,7 +272,7 @@ export function CircuitCanvas({ circuit = pythagorean, onUseCircuit }: CircuitCa
 
   const compileCanvas = useCallback(async () => {
     try {
-      const nextCircuit = canvasCircuit(nodes, edges, circuit);
+      const nextCircuit = canvasCircuit(nodes, edges, lookupTemplate);
       const compiled = await compile(nextCircuit);
       setCompileStatus(
         `Compiled ${compiled.rows.length} PLONK rows (n = ${compiled.n}); circuit digest is bound into the proof transcript.`,
@@ -269,7 +283,7 @@ export function CircuitCanvas({ circuit = pythagorean, onUseCircuit }: CircuitCa
         caught instanceof Error ? caught.message : 'The canvas could not be compiled.',
       );
     }
-  }, [circuit, edges, nodes, onUseCircuit]);
+  }, [edges, lookupTemplate, nodes, onUseCircuit]);
 
   const reset = useCallback(
     (preset: boolean) => {
@@ -278,6 +292,7 @@ export function CircuitCanvas({ circuit = pythagorean, onUseCircuit }: CircuitCa
         : { nodes: [] as GateNode[], edges: [] as Edge[] };
       setNodes(next.nodes);
       setEdges(next.edges);
+      setLookupTemplate(preset ? pythagorean : undefined);
       setSelectedId(undefined);
       setCompileStatus(
         preset
@@ -305,7 +320,7 @@ export function CircuitCanvas({ circuit = pythagorean, onUseCircuit }: CircuitCa
     <section className="circuit-workbench" aria-labelledby="canvas-title">
       <div className="canvas-heading">
         <div>
-          <p className="eyebrow">M6 circuit workbench</p>
+          <p className="eyebrow">Circuit workbench</p>
           <h2 id="canvas-title">Build the claim before proving it</h2>
           <p>
             Every wire is a copy-constraint class — matching edge colours mark the same source wire.
