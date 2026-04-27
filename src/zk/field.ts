@@ -1,15 +1,15 @@
 /**
  * Goldilocks field F_p, p = 2^64 − 2^32 + 1. docs/PROTOCOL-SPEC.md §4.1.
- * IMPLEMENTED (scaffold anchor) — tested against independently computed vectors
+ * Tested against independently computed vectors
  * (docs/PROTOCOL-SPEC.md §13, regenerable via tools/reference.py).
  *
  * BigInt throughout: correct-by-construction and fast enough at workshop sizes
- * (budget: LDE of 2^13 < 100 ms, measured at M1).
+ * (budget: LDE of 2^13 < 100 ms).
  */
 
 export const P = 18446744069414584321n; // 2^64 - 2^32 + 1
 export const GENERATOR = 7n; // verified primitive root
-export const TWO_ADICITY = 32; // p - 1 = 2^32 · 3 · 5 · 17 · 257 · 65537
+const TWO_ADICITY = 32; // p - 1 = 2^32 · 3 · 5 · 17 · 257 · 65537
 
 export type Fp = bigint; // invariant: 0 <= x < P
 
@@ -80,12 +80,4 @@ export function batchInverse(xs: readonly Fp[]): Fp[] {
 export function twoAdicRoot(k: number): Fp {
   if (k < 0 || k > TWO_ADICITY) throw new Error(`no 2^${k} root of unity`);
   return pow(GENERATOR, (P - 1n) >> BigInt(k));
-}
-
-/** Uniform field element from a seeded 64-bit draw with rejection (docs/PROTOCOL-SPEC.md §4.9). */
-export function fromU64Rejecting(draw: () => bigint): Fp {
-  for (;;) {
-    const x = draw();
-    if (x < P) return x;
-  }
 }

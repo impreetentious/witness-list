@@ -1,5 +1,5 @@
 /**
- * Radix-2 NTT/iNTT over Goldilocks + coset LDE (blowup 8). docs/PROTOCOL-SPEC.md §4.2. M1.
+ * Radix-2 NTT/iNTT over Goldilocks + coset LDE (blowup 8). docs/PROTOCOL-SPEC.md §4.2.
  * Gate Z3: iNTT∘NTT = id up to 2^13; NTT = naive DFT for n ≤ 64.
  */
 import { GENERATOR, P, inv, mul, pow, twoAdicRoot } from './field';

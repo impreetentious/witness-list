@@ -22,7 +22,7 @@ export interface Fp2 {
   c1: Fp;
 }
 
-export const FP2_NON_RESIDUE = 7n;
+const FP2_NON_RESIDUE = 7n;
 export const fp2Zero: Fp2 = { c0: 0n, c1: 0n };
 export const fp2One: Fp2 = { c0: 1n, c1: 0n };
 
@@ -50,10 +50,6 @@ export function sub(left: Fp2, right: Fp2): Fp2 {
   return { c0: subBase(left.c0, right.c0), c1: subBase(left.c1, right.c1) };
 }
 
-export function neg(value: Fp2): Fp2 {
-  return { c0: negBase(value.c0), c1: negBase(value.c1) };
-}
-
 /** (a + bu)(c + du) = (ac + 7bd) + (ad + bc)u. */
 export function mul(left: Fp2, right: Fp2): Fp2 {
   return {
@@ -62,7 +58,7 @@ export function mul(left: Fp2, right: Fp2): Fp2 {
   };
 }
 
-export function square(value: Fp2): Fp2 {
+function square(value: Fp2): Fp2 {
   return mul(value, value);
 }
 
@@ -77,10 +73,6 @@ export function inv(value: Fp2): Fp2 {
   return { c0: mulBase(value.c0, normInverse), c1: mulBase(negBase(value.c1), normInverse) };
 }
 
-export function div(left: Fp2, right: Fp2): Fp2 {
-  return mul(left, inv(right));
-}
-
 export function pow(base: Fp2, exponent: bigint): Fp2 {
   if (exponent < 0n) throw new Error('fp2.pow requires a non-negative exponent');
   let value = base;
@@ -92,16 +84,6 @@ export function pow(base: Fp2, exponent: bigint): Fp2 {
     power >>= 1n;
   }
   return result;
-}
-
-/** Frobenius conjugation in this quadratic extension. */
-export function conjugate(value: Fp2): Fp2 {
-  return { c0: value.c0, c1: negBase(value.c1) };
-}
-
-/** A deterministic, canonical wire representation used by transcript adapters. */
-export function toTuple(value: Fp2): readonly [Fp, Fp] {
-  return [value.c0, value.c1];
 }
 
 export function isCanonical(value: Fp2): boolean {

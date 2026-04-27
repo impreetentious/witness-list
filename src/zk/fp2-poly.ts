@@ -2,7 +2,7 @@
 import type { Fp } from './field';
 import { inv as invBase, mul as mulBase, neg as negBase, twoAdicRoot } from './field';
 import type { Fp2 } from './fp2';
-import { add, embed, equal, fp2One, fp2Zero, inv, isZero, mul, sub } from './fp2';
+import { add, embed, fp2One, fp2Zero, inv, isZero, mul, sub } from './fp2';
 import { cosetEvaluate, interpolate } from './ntt';
 import { polyDivRem, vanishing } from './poly';
 
@@ -149,10 +149,4 @@ export function publicInputAtFp2(publicInputs: readonly Fp[], n: number, point: 
     value = add(value, mul(embed(negBase(publicInputs[row]!)), lagrangeFp2(row, n, point)));
   }
   return value;
-}
-
-export function fp2PolyEqual(left: readonly Fp2[], right: readonly Fp2[]): boolean {
-  const a = trim(left.slice());
-  const b = trim(right.slice());
-  return a.length === b.length && a.every((value, index) => equal(value, b[index]!));
 }
