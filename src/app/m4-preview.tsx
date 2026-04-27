@@ -35,7 +35,6 @@ export function M4Preview() {
         ),
         [5n],
         { n: circuit.n, blowup: 8, queries: 32, zk: false },
-        42,
       );
       if (trace.proof.version !== 1)
         throw new Error('M4 preview produced an unexpected protocol version');
@@ -59,7 +58,7 @@ export function M4Preview() {
 
   return (
     <section className="m4-preview" aria-labelledby="m4-preview-title">
-      <p className="eyebrow">Development preview</p>
+      <p className="eyebrow">Algebra-only lesson</p>
       <h2 id="m4-preview-title">The identity, before FRI</h2>
       <p>
         This runs the Pythagorean witness (3, 4, 5) through real PLONK row constraints, commitments,

@@ -1,8 +1,7 @@
 /**
- * The honesty gates — docs/PROTOCOL-SPEC.md §9. Z1/Z2 are REAL now (field.ts is implemented);
- * fixture values were computed by an independent Python implementation
- * (tools/reference.py) before any TypeScript existed. Every current Phase 1
- * acceptance gate below is executable in the node-only protocol suite.
+ * The honesty gates — docs/PROTOCOL-SPEC.md §9. Field fixtures were computed by
+ * the independent Python implementation in tools/reference.py; every gate below
+ * is executable in the node-only protocol suite.
  */
 import { describe, expect, it } from 'vitest';
 import fc from 'fast-check';
@@ -139,7 +138,7 @@ describe('Z2: fixed vectors (independently computed — docs/PROTOCOL-SPEC.md §
   });
 });
 
-describe('M1 gates — poly & NTT', () => {
+describe('Polynomial and NTT gates', () => {
   it('Z3: iNTT∘NTT = id for n = 2..2^13; NTT matches naive DFT for n ≤ 64', () => {
     for (let logN = 1; logN <= 13; logN++) {
       const n = 1 << logN;
@@ -199,7 +198,7 @@ describe('M1 gates — poly & NTT', () => {
     }
   });
 
-  it('M1 bench: coset LDE of 2^13 coeffs < 100 ms', () => {
+  it('NTT budget: coset LDE of 2^13 coeffs < 100 ms', () => {
     const coeffs = Array.from({ length: 1 << 13 }, (_, i) => BigInt(i + 1));
     const startedAt = performance.now();
     const evaluations = cosetLDE(coeffs, 8);
@@ -209,7 +208,7 @@ describe('M1 gates — poly & NTT', () => {
   });
 });
 
-describe('M2 gates — Merkle commitments & Fiat–Shamir transcript', () => {
+describe('Merkle commitment and Fiat–Shamir transcript gates', () => {
   it('Merkle paths bind the domain-separated leaf index and composite field leaf', async () => {
     const leaves = Array.from({ length: 8 }, (_, i) => [BigInt(i + 1), BigInt((i + 1) ** 2)]);
     const tree = await buildTree(leaves, 'wires');
@@ -221,6 +220,15 @@ describe('M2 gates — Merkle commitments & Fiat–Shamir transcript', () => {
 
     expect(await verifyPath(tree.root, [999n, 1n], tree.path(3), 'wires')).toBe(false);
     expect(await verifyPath(tree.root, leaves[3]!, tree.path(3), 'different-domain')).toBe(false);
+    expect(
+      await verifyPath(
+        tree.root,
+        leaves[3]!,
+        { ...tree.path(3), siblings: [...tree.path(3).siblings, new Uint8Array(32)] },
+        'wires',
+        leaves.length,
+      ),
+    ).toBe(false);
   });
 
   it('Fiat–Shamir transcript replays byte-for-byte and domain separates challenges', async () => {
@@ -245,7 +253,7 @@ describe('M2 gates — Merkle commitments & Fiat–Shamir transcript', () => {
   });
 });
 
-describe('M3 gates — arithmetization', () => {
+describe('Arithmetization gates', () => {
   it('compiles deterministic PLONK rows and preserves the non-propagating tamper hook', async () => {
     const compiled = await compile(pythagorean);
     expect(compiled.n).toBe(32);
@@ -333,7 +341,7 @@ describe('M3 gates — arithmetization', () => {
       compile(age),
     ]);
     expect(pythagoreanCompiled.n).toBe(32);
-    expect(sudokuCompiled.n).toBe(512); // generic-gate baseline; selector fusion is intentionally not remaining build work (§12)
+    expect(sudokuCompiled.n).toBe(512); // documented generic-gate baseline (§12)
     expect(mimcCompiled.n).toBe(256);
     expect(ageCompiled.n).toBe(128);
     expect(sudokuGivens).toHaveLength(4);
@@ -342,7 +350,7 @@ describe('M3 gates — arithmetization', () => {
   });
 });
 
-describe('M4/M5 gates — protocol', () => {
+describe('Protocol gates', () => {
   it('Z6: exact division yields zero remainder; a row-local violation identifies its row', () => {
     const n = 8;
     const honestComposition = polyMul([3n, 5n, 9n], vanishing(n));
@@ -436,7 +444,6 @@ describe('M4/M5 gates — protocol', () => {
       ),
       [5n],
       { n: compiled.n, blowup: 8, queries: 32, zk: false },
-      42,
     );
     expect(trace.quotientRemainder).toEqual(Array<Fp>(compiled.n).fill(0n));
     if (trace.proof.version !== 1) throw new Error('M4 returned an unexpected protocol version');
@@ -456,7 +463,7 @@ describe('M4/M5 gates — protocol', () => {
       (await verifyM4(compiled, tamperedProof)).checks.find((check) => check.id === 'V2')?.ok,
     ).toBe(false);
   });
-  it('M5: a committed DEEP/FRI proof verifies V1–V7, while a changed leaf fails V3', async () => {
+  it('a committed DEEP/FRI proof verifies V1–V7, while a changed leaf fails V3', async () => {
     const compiled = await compile(pythagorean);
     const trace = await prove(
       compiled,
@@ -475,7 +482,8 @@ describe('M4/M5 gates — protocol', () => {
     const verified = await verify(compiled, trace.proof);
     expect(verified.ok).toBe(true);
     expect(verified.checks.every((check) => check.ok)).toBe(true);
-    if (trace.proof.version !== 2) throw new Error('M5 returned an unexpected protocol version');
+    if (trace.proof.version !== 2)
+      throw new Error('the full prover returned an unexpected protocol version');
 
     const firstQuery = trace.proof.queries[0]!;
     const tampered = {
@@ -498,6 +506,33 @@ describe('M4/M5 gates — protocol', () => {
     const tamperedResult = await verify(compiled, tampered);
     expect(tamperedResult.ok).toBe(false);
     expect(tamperedResult.checks.find((check) => check.id === 'V3')?.ok).toBe(false);
+  });
+
+  it('rejects unsupported verifier parameters before deriving proof shapes', async () => {
+    const compiled = await compile(pythagorean);
+    const trace = await prove(
+      compiled,
+      generateWitness(
+        pythagorean,
+        new Map([
+          [1, 5n],
+          [2, 3n],
+          [3, 4n],
+        ]),
+      ),
+      [5n],
+      { n: compiled.n, blowup: 8, queries: 1, zk: false },
+      23,
+    );
+    for (const params of [
+      { ...trace.proof.params, queries: 0 },
+      { ...trace.proof.params, queries: Number.MAX_SAFE_INTEGER },
+      { ...trace.proof.params, blowup: 4 },
+    ]) {
+      const result = await verify(compiled, { ...trace.proof, params });
+      expect(result.ok).toBe(false);
+      expect(result.checks.find((check) => check.id === 'V7')?.ok).toBe(false);
+    }
   });
   it('Z9: shared A1/A2 attack functions fail at V2/V3 for every preset across deterministic replays', async () => {
     const mimc = await makeMimcPreset();
@@ -700,7 +735,7 @@ describe('M4/M5 gates — protocol', () => {
   });
 });
 
-describe('Z15: Phase 2A gates — quadratic extension challenges', () => {
+describe('Z15: quadratic extension challenges', () => {
   it('uses the independently verified non-residue and embeds the base field faithfully', () => {
     expect(nonResidueIsValid()).toBe(true);
     expect(equalFp2(embed(123n), fp2(123n, 0n))).toBe(true);
@@ -777,7 +812,7 @@ describe('Z15: Phase 2A gates — quadratic extension challenges', () => {
   });
 });
 
-describe('Z20: Phase 2B/2C gates — bound lookups and multiset Sudoku', () => {
+describe('Z20: bound lookups and multiset Sudoku', () => {
   it('proves Plookup membership and rejects an out-of-table age', async () => {
     const compiled = await compile(age);
     const params = { n: compiled.n, blowup: 8, queries: 1, zk: false };
@@ -830,7 +865,7 @@ describe('Z20: Phase 2B/2C gates — bound lookups and multiset Sudoku', () => {
   }, 30_000);
 });
 
-describe('Z16: Phase 2D gates — Poseidon workshop hash', () => {
+describe('Z16: Poseidon workshop hash', () => {
   it('matches the independently regenerated reference vectors', async () => {
     await expect(poseidonHash(0n, 0n)).resolves.toBe(13593260552114296815n);
     await expect(poseidonHash(1n, 2n)).resolves.toBe(18371212222320491351n);
@@ -852,7 +887,7 @@ describe('Z16: Phase 2D gates — Poseidon workshop hash', () => {
   });
 });
 
-describe('Z16: Phase 2E gates — post-commitment grinding deterrent', () => {
+describe('Z16: post-commitment grinding deterrent', () => {
   it('finds and checks transcript-bound SHA-256 work', async () => {
     const challenge = new Uint8Array(32).fill(7);
     const nonce = await findGrindingNonce(challenge, 6);
@@ -885,7 +920,7 @@ describe('Z16: Phase 2E gates — post-commitment grinding deterrent', () => {
   });
 });
 
-describe('Z17: Phase 3 gates — Witness Script', () => {
+describe('Z17: Witness Script', () => {
   it('property-checks canonical pretty-print and parse idempotence', () => {
     fc.assert(
       fc.property(
@@ -979,7 +1014,7 @@ describe('Z17: Phase 3 gates — Witness Script', () => {
   });
 });
 
-describe('M8/M9 gates — ZK & sharing', () => {
+describe('Zero-knowledge and sharing gates', () => {
   it('Z13: blinding changes off-trace openings across seeds; disabled blinding repeats', async () => {
     const polynomial = [3n, 1n, 4n];
     const params = { n: 8, blowup: 8, queries: 4, zk: true };
@@ -1056,6 +1091,28 @@ describe('M8/M9 gates — ZK & sharing', () => {
     const fallback = await encodeShare(payload, false);
     expect(fallback.startsWith('#pu=')).toBe(true);
     expect(await decodeShare(fallback)).toEqual(payload);
+
+    const mismatched = JSON.parse(
+      Buffer.from(fallback.slice('#pu='.length), 'base64url').toString('utf8'),
+    ) as { publicInputs: string[] };
+    mismatched.publicInputs[0] = '6';
+    await expect(
+      decodeShare(`#pu=${Buffer.from(JSON.stringify(mismatched)).toString('base64url')}`),
+    ).rejects.toThrow('public inputs do not match');
+
+    const oversizedPath = JSON.parse(
+      Buffer.from(fallback.slice('#pu='.length), 'base64url').toString('utf8'),
+    ) as {
+      proof: { queries: Array<{ paths: Record<string, { siblings: string[] }> }> };
+    };
+    Object.values(oversizedPath.proof.queries[0]!.paths)[0]!.siblings = Array.from(
+      { length: 33 },
+      () => 'A'.repeat(43),
+    );
+    await expect(
+      decodeShare(`#pu=${Buffer.from(JSON.stringify(oversizedPath)).toString('base64url')}`),
+    ).rejects.toThrow('invalid Merkle path');
+    await expect(decodeShare(`#pu=${'A'.repeat(4_000_001)}`)).rejects.toThrow('size limit');
 
     const compressed = await encodeShare(payload, true);
     expect(compressed.startsWith('#p=') || compressed.startsWith('#pu=')).toBe(true);

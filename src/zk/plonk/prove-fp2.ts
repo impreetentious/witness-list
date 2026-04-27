@@ -18,11 +18,12 @@ import type { MerkleTree } from '../merkle';
 import { createTranscript } from '../transcript';
 import type { Params, Proof, ProofTrace } from '../types';
 import { blind, blindFp2, seededFieldSource } from '../zkmode';
-import { selectorPolynomials, sigmaPolynomials } from './arithmetic';
+import { sigmaPolynomials } from './arithmetic';
 import { buildGrandProductFp2 } from './permutation-fp2';
 import { buildLookupGrandProduct, buildLookupWitness } from './lookup';
 import { buildQuotientFp2, composeConstraintsFp2 } from './quotient-fp2';
 import { quotientChunkCount, quotientChunkLabel, friInitialDegreeBound } from './chunks';
+import { paramsAreSupported } from './params';
 import { buildFriFp2, deepCompositionAtFp2 } from '../fri/fri-fp2';
 import { domainPoint } from '../fri/fri';
 
@@ -101,8 +102,8 @@ export async function proveFp2(
   seed: number,
   forcePastRemainder: boolean,
 ): Promise<ProofTrace> {
-  if (params.n !== circuit.n || params.blowup < 1 || (params.blowup & (params.blowup - 1)) !== 0)
-    throw new Error('proof parameters do not match compiled circuit');
+  if (!paramsAreSupported(params, circuit.n))
+    throw new Error('proof parameters are outside the supported protocol range');
   const transcript = createTranscript('witness-list/plonk-v2/fp2-plookup');
   await transcript.absorb('params', paramsBytes(params));
   await transcript.absorb('circuit-digest', circuit.digest);
@@ -338,10 +339,6 @@ export async function proveFp2(
     proof,
     transcript: transcript.log,
     stages: {
-      milestone: forcePastRemainder
-        ? 'Attack A1 — forced past a nonzero Fp² quotient remainder; V2 must reject'
-        : 'Protocol v2 — Fp² PLONK/DEEP/FRI with bound Plookup',
-      seed,
       beta,
       gamma,
       alpha,
@@ -349,7 +346,7 @@ export async function proveFp2(
       rho,
       witness: { a: witness.a.slice(), b: witness.b.slice(), c: witness.c.slice() },
       wirePolynomials: { a: a.slice(), b: b.slice(), c: c.slice() },
-      grandProduct: { values: copyGrand.z, partials: copyGrand.partials },
+      grandProduct: { partials: copyGrand.partials },
       ...(lookupGrand === undefined
         ? {}
         : {
@@ -360,10 +357,6 @@ export async function proveFp2(
               h2: lookupWitness!.h2,
             },
           }),
-      quotient: { chunks: quotient.chunks },
-      selectors: selectorPolynomials(circuit),
-      composedOnH: composition.composedOnH,
-      friLayers: fri.roots.length,
     },
     quotientRemainder: quotient.remainderOnH,
   };

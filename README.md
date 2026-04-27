@@ -83,7 +83,7 @@ those hosts the policy is documentation rather than enforcement.
 
 ## Stack
 
-Next.js (static export) · React 19 · TypeScript (strict) · React Flow (circuit canvas) · CodeMirror 6 (Witness Script editor). The protocol kernel (`src/zk/`) is **dependency-free, hand-rolled TypeScript**: Goldilocks/Fp² arithmetic on BigInt, radix-2 NTT, SHA-256 and workshop Poseidon trees, PLONK copy/lookup grand products, and Fp² DEEP-FRI. The prover runs in a Web Worker and emits a full trace — which is what makes every step inspectable.
+Next.js (static export) · React 19 · TypeScript (strict) · React Flow (circuit canvas) · CodeMirror 6 (Witness Script editor). The protocol kernel (`src/zk/`) is **dependency-free, hand-rolled TypeScript**: Goldilocks/Fp² arithmetic on BigInt, radix-2 NTT, SHA-256 and workshop Poseidon trees, PLONK copy/lookup grand products, and Fp² DEEP-FRI. The prover runs in a Web Worker and emits a bounded proof trace for the player and inspectors.
 
 ## License
 
@@ -91,4 +91,4 @@ MIT — see [LICENSE](./LICENSE).
 
 ---
 
-**Version:** v0.9.3
+**Version:** v0.9.4

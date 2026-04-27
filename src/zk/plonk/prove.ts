@@ -1,7 +1,7 @@
 /**
- * Full prover pipeline, rounds 0–5. docs/PROTOCOL-SPEC.md §4.6. M4 (rounds 0–4) + M5 (round 5, FRI).
- * Emits ProofTrace (proof + every intermediate) for the player. Runs in the worker.
- * M4 alone is EXPLICITLY UNSOUND (no low-degree test) — label it everywhere.
+ * Full prover pipeline, rounds 0–5. docs/PROTOCOL-SPEC.md §4.6.
+ * Emits ProofTrace (proof + bounded player payloads) from the worker.
+ * M4 is EXPLICITLY UNSOUND ALONE (no low-degree test) — label it everywhere.
  */
 import type { Fp } from '../field';
 import type { CompiledCircuit, Witness } from '../circuit/compile';
@@ -12,17 +12,12 @@ import { evalAt } from '../poly';
 import { createTranscript } from '../transcript';
 import type { MerkleRoot, Params, ProofV1, ProofTrace } from '../types';
 import { composeConstraints, buildQuotient } from './quotient';
-import {
-  omegaTimes,
-  selectorPolynomials,
-  sigmaPolynomials,
-  zetaIsInLdeCoset,
-  zetaIsInTraceDomain,
-} from './arithmetic';
+import { omegaTimes, sigmaPolynomials, zetaIsInLdeCoset, zetaIsInTraceDomain } from './arithmetic';
 import { buildGrandProduct } from './permutation';
 import { buildFri, deepCompositionAt, domainPoint } from '../fri/fri';
 import { blind, seededFieldSource } from '../zkmode';
 import { friInitialDegreeBound, quotientChunkCount, quotientChunkLabel } from './chunks';
+import { paramsAreSupported } from './params';
 import { proveFp2 } from './prove-fp2';
 
 export function prove(
@@ -58,9 +53,8 @@ export async function proveV1ForCompatibility(
   seed: number,
   forcePastRemainder = false,
 ): Promise<ProofTrace> {
-  if (params.n !== circuit.n || params.blowup < 1 || (params.blowup & (params.blowup - 1)) !== 0) {
-    throw new Error('proof parameters do not match the compiled circuit');
-  }
+  if (!paramsAreSupported(params, circuit.n))
+    throw new Error('proof parameters are outside the supported protocol range');
   const transcript = createTranscript('witness-list/plonk-v1');
   await transcript.absorb('params', paramsBytes(params));
   await transcript.absorb('circuit-digest', circuit.digest);
@@ -201,10 +195,6 @@ export async function proveV1ForCompatibility(
     proof,
     transcript: transcript.log,
     stages: {
-      milestone: forcePastRemainder
-        ? 'Attack A1 — forced past a nonzero quotient remainder; V2 must reject this proof'
-        : 'M5 — DEEP/FRI query proof (teaching-scale parameters; soundness is conjectured at the displayed bounds)',
-      seed,
       beta,
       gamma,
       alpha,
@@ -212,11 +202,7 @@ export async function proveV1ForCompatibility(
       rho,
       witness: { a: witness.a.slice(), b: witness.b.slice(), c: witness.c.slice() },
       wirePolynomials: { a: a.slice(), b: b.slice(), c: c.slice() },
-      grandProduct: { values: grandProduct.z.slice(), partials: grandProduct.partials.slice() },
-      quotient: { chunks: quotient.chunks.map((chunk) => chunk.slice()) },
-      selectors: selectorPolynomials(circuit),
-      composedOnH: composition.composedOnH,
-      friLayers: fri.roots.length,
+      grandProduct: { partials: grandProduct.partials.slice() },
     },
     quotientRemainder: quotient.remainderOnH,
   };
@@ -327,11 +313,9 @@ export async function proveM4(
   witness: Witness,
   publicInputs: Fp[],
   params: Params,
-  seed: number,
 ): Promise<ProofTrace> {
-  if (params.n !== circuit.n || params.blowup < 1 || (params.blowup & (params.blowup - 1)) !== 0) {
-    throw new Error('M4 proof parameters do not match the compiled circuit');
-  }
+  if (!paramsAreSupported(params, circuit.n))
+    throw new Error('M4 proof parameters are outside the supported protocol range');
   if (params.zk) throw new Error('M4 does not yet combine blinding with its unsound opening path');
   if ((params.grindingBits ?? 0) !== 0)
     throw new Error('M4 has no FRI query phase in which to bind grinding work');
@@ -404,16 +388,7 @@ export async function proveM4(
   return {
     proof,
     transcript: transcript.log,
-    stages: {
-      milestone: 'M4 — UNSOUND ALONE: no DEEP/FRI low-degree proof yet',
-      seed,
-      beta,
-      gamma,
-      alpha,
-      zeta,
-      selectors: selectorPolynomials(circuit),
-      composedOnH: composition.composedOnH,
-    },
+    stages: {},
     quotientRemainder: quotient.remainderOnH,
   };
 }

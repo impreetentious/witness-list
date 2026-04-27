@@ -1,6 +1,6 @@
 /**
  * Protocol data types — the Proof (what the verifier sees) vs the ProofTrace
- * (Proof + every intermediate artifact, for the player). docs/PROTOCOL-SPEC.md §3, §8.
+ * (Proof + bounded player payloads). docs/PROTOCOL-SPEC.md §3, §8.
  * The separation is the pedagogy: the UI's "what the verifier actually sees"
  * toggle greys out everything not in Proof.
  */
@@ -10,9 +10,9 @@ import type { Fp2 } from './fp2';
 export interface Params {
   /** trace rows, power of two */
   n: number;
-  /** LDE blowup (v1: 8) */
+  /** LDE blowup (supported protocol value: 8) */
   blowup: number;
-  /** FRI queries (v1: 32) */
+  /** FRI queries (supported range: 1–32; workshop default: 32) */
   queries: number;
   /** ZK blinding on/off */
   zk: boolean;
@@ -66,7 +66,7 @@ export interface ProofV1 {
   queries: QueryOpeningV1[];
 }
 
-export interface LookupRoots {
+interface LookupRoots {
   mode: 'membership' | 'multiset';
   h1Root?: MerkleRoot;
   h2Root?: MerkleRoot;
@@ -106,7 +106,7 @@ export interface Proof {
 
 export type AnyProof = ProofV1 | Proof;
 
-export type CheckId = 'V1' | 'V2' | 'V3' | 'V4' | 'V5' | 'V6' | 'V7';
+type CheckId = 'V1' | 'V2' | 'V3' | 'V4' | 'V5' | 'V6' | 'V7';
 
 export interface CheckResult {
   id: CheckId;
@@ -130,7 +130,7 @@ export interface TranscriptEntry {
   extensionValue?: Fp2;
 }
 
-/** Everything the player renders. Proof ⊂ ProofTrace, structurally. */
+/** Proof plus the bounded intermediate payloads rendered by the player. */
 export interface ProofTrace {
   proof: AnyProof;
   transcript: TranscriptEntry[];
