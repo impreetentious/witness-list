@@ -37,7 +37,7 @@ export function foldPairFp2(atX: Fp2, atNegativeX: Fp2, beta: Fp2, x: Fp): Fp2 {
   return add(even, mul(beta, odd));
 }
 
-export function foldLayerFp2(layer: readonly Fp2[], beta: Fp2, shift: Fp): Fp2[] {
+function foldLayerFp2(layer: readonly Fp2[], beta: Fp2, shift: Fp): Fp2[] {
   assertPowerOfTwo(layer.length);
   if (layer.length < 2) throw new Error('Fp² FRI fold needs at least two values');
   const half = layer.length >> 1;

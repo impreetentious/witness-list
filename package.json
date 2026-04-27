@@ -2,7 +2,7 @@
   "name": "witness-list",
   "private": true,
   "type": "module",
-  "version": "0.9.6",
+  "version": "0.9.7",
   "description": "Witness List — a zero-knowledge proof workshop. Build a claim, prove it, try to cheat.",
   "license": "MIT",
   "repository": {

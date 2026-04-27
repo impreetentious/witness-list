@@ -1,6 +1,6 @@
 /**
  * Copy constraints: σ polynomials + grand product Z with running-product log
- * (the telescoping column the UI renders). docs/PROTOCOL-SPEC.md §4.3. M4.
+ * (the telescoping column the UI renders). docs/PROTOCOL-SPEC.md §4.3.
  * Gate Z5: hand-built 4-row case telescopes to 1; one broken copy ⇒ Z(end) ≠ 1.
  */
 import { add, inv, mul, twoAdicRoot } from '../field';

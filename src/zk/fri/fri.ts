@@ -1,6 +1,6 @@
 /**
  * Batch DEEP-FRI: composition over the LDE coset, halving folds, layer commits,
- * queries with path walks. docs/PROTOCOL-SPEC.md §4.6 (round 5) + §4.7. M5.
+ * queries with path walks. docs/PROTOCOL-SPEC.md §4.6 (round 5) + §4.7.
  * Gate Z7 (fold property), Z8/Z9 (E2E + attacks), Z12 (grinding stats).
  */
 import { GENERATOR, add, inv, mul, pow, sub, twoAdicRoot } from '../field';
@@ -11,12 +11,6 @@ import type { MerkleTree } from '../merkle';
 import type { QueryOpeningV1 } from '../types';
 import type { Transcript } from '../transcript';
 import { encodeGrindingNonce, findGrindingNonce, validateGrindingBits } from '../grinding';
-
-export interface FriProof {
-  layerRoots: { bytes: Uint8Array }[];
-  finalCoeffs: Fp[]; // deg < 8
-  queries: QueryOpeningV1[];
-}
 
 interface FriLayer {
   values: Fp[];

@@ -6,7 +6,7 @@ import { add, embed, fp2One, inv, isZero, mul } from '../fp2';
 import type { CompiledCircuit, Witness } from '../circuit/compile';
 import { K1, K2 } from './permutation';
 
-export interface PermutationFactorsFp2 {
+interface PermutationFactorsFp2 {
   numerators: Fp2[];
   denominators: Fp2[];
 }
@@ -34,7 +34,7 @@ function factor(wire: Fp, beta: Fp2, point: Fp, gamma: Fp2): Fp2 {
   return add(add(embed(wire), mul(beta, embed(point))), gamma);
 }
 
-export function permutationFactorsFp2(
+function permutationFactorsFp2(
   circuit: CompiledCircuit,
   witness: Witness,
   beta: Fp2,

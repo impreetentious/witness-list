@@ -22,7 +22,7 @@ import { selectorPolynomials, sigmaPolynomials } from './arithmetic';
 import { buildGrandProductFp2 } from './permutation-fp2';
 import { buildLookupGrandProduct, buildLookupWitness, type LookupWitness } from './lookup';
 
-export interface LookupCommittedPolynomials {
+interface LookupCommittedPolynomials {
   witness: LookupWitness;
   h1?: Poly;
   h2?: Poly;
