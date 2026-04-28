@@ -64,11 +64,3 @@ export async function makeMimcPreset(): Promise<MimcPreset> {
   builder.assertZero(difference);
   return { circuit: builder.build('MiMC-7 preimage', [digestWire]), preimageWire, digestWire };
 }
-
-export async function mimcInputs(preimage: Fp = 123456789n): Promise<Map<number, Fp>> {
-  const preset = await makeMimcPreset();
-  return new Map([
-    [preset.preimageWire, preimage],
-    [preset.digestWire, await mimcHash(preimage)],
-  ]);
-}

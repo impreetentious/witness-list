@@ -21,7 +21,7 @@ function validateLeaves(leaves: readonly Fp[]): void {
 }
 
 /** Internal-node compression, identical to Witness Script's merkle_path call. */
-export async function poseidonNodeHash(left: Fp, right: Fp): Promise<Fp> {
+async function poseidonNodeHash(left: Fp, right: Fp): Promise<Fp> {
   return poseidonHash(left, right);
 }
 

@@ -9,11 +9,10 @@
 import { add, inv, mod, mul, pow } from './field';
 import type { Fp } from './field';
 
-export const POSEIDON_WIDTH = 3;
-export const POSEIDON_RATE = 2;
+const POSEIDON_WIDTH = 3;
 export const POSEIDON_FULL_ROUNDS = 8;
 export const POSEIDON_PARTIAL_ROUNDS = 22;
-export const POSEIDON_ROUNDS = POSEIDON_FULL_ROUNDS + POSEIDON_PARTIAL_ROUNDS;
+const POSEIDON_ROUNDS = POSEIDON_FULL_ROUNDS + POSEIDON_PARTIAL_ROUNDS;
 
 const encoder = new TextEncoder();
 const cachedRoundConstants = new Map<string, Promise<Fp>>();
@@ -29,7 +28,7 @@ async function sha256(bytes: Uint8Array): Promise<Uint8Array> {
  * in big-endian form reduced modulo p. This keeps a small implementation
  * independently reproducible by the reference script.
  */
-export function poseidonRoundConstant(round: number, index: number): Promise<Fp> {
+function poseidonRoundConstant(round: number, index: number): Promise<Fp> {
   if (!Number.isInteger(round) || round < 0 || round >= POSEIDON_ROUNDS)
     throw new Error(`invalid Poseidon round ${round}`);
   if (!Number.isInteger(index) || index < 0 || index >= POSEIDON_WIDTH)
@@ -74,8 +73,8 @@ export function poseidonMds(state: readonly Fp[]): Fp[] {
   );
 }
 
-/** Applies one full or partial Poseidon round. Exported for the workshop inspector. */
-export function poseidonRound(state: readonly Fp[], constants: readonly Fp[], full: boolean): Fp[] {
+/** Applies one full or partial Poseidon round. */
+function poseidonRound(state: readonly Fp[], constants: readonly Fp[], full: boolean): Fp[] {
   if (state.length !== POSEIDON_WIDTH || constants.length !== POSEIDON_WIDTH)
     throw new Error('Poseidon round width mismatch');
   const shifted = state.map((value, index) => add(value, constants[index]!));
@@ -83,7 +82,7 @@ export function poseidonRound(state: readonly Fp[], constants: readonly Fp[], fu
   return poseidonMds(substituted);
 }
 
-export async function poseidonPermute(initial: readonly Fp[]): Promise<Fp[]> {
+async function poseidonPermute(initial: readonly Fp[]): Promise<Fp[]> {
   if (initial.length !== POSEIDON_WIDTH)
     throw new Error('Poseidon permutation expects a width-3 state');
   const constants = await poseidonRoundConstants();
@@ -99,7 +98,7 @@ export async function poseidonPermute(initial: readonly Fp[]): Promise<Fp[]> {
   return state;
 }
 
-/** Two-to-one sponge compression used by the Phase 2 preset and Witness Script. */
+/** Two-to-one sponge compression used by the workshop preset and Witness Script. */
 export async function poseidonHash(left: Fp, right: Fp): Promise<Fp> {
   return (await poseidonPermute([left, right, 0n]))[0]!;
 }

@@ -37,7 +37,7 @@ def mimc(x: int, rounds: int = 32) -> int:
     return (s + x) % P  # feedforward
 
 
-# Phase 2 workshop Poseidon parameterisation. Constants are generated from the
+# Workshop Poseidon parameterisation. Constants are generated from the
 # same domain-separated SHA-256 rule as src/zk/poseidon.ts, rather than copied
 # into either implementation by hand.
 POSEIDON_WIDTH = 3
