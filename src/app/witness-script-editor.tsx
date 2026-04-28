@@ -161,7 +161,7 @@ export function WitnessScriptEditor({ onUseScript }: WitnessScriptEditorProps) {
     <section className="witness-script" aria-labelledby="script-title">
       <div className="script-heading">
         <div>
-          <p className="eyebrow">Phase 3 · Witness Script</p>
+          <p className="eyebrow">Witness Script</p>
           <h2 id="script-title">Write a claim, then inspect its circuit</h2>
           <p>
             Inputs, lookup-backed ranges, arithmetic assertions, and bounded loops compile to the

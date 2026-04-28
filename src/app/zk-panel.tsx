@@ -55,8 +55,8 @@ export function ZkPanel({ trace, onRunZk }: { trace?: ProofTrace; onRunZk?: () =
 
   return (
     <section className="zk-panel" aria-labelledby="zk-title">
-      <p className="eyebrow">M8 ZK ledger</p>
-      <h2 id="zk-title">What the verifier learns — and what this build does not yet claim</h2>
+      <p className="eyebrow">Zero-knowledge ledger</p>
+      <h2 id="zk-title">What the verifier learns — and what the protocol does not claim</h2>
       <p>
         Blinding adds Z<sub>H</sub>(X)·r(X), so it leaves every trace-domain constraint unchanged
         while changing off-domain openings. Blinded proofs use additional positional quotient chunks

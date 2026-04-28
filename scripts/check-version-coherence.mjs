@@ -39,8 +39,6 @@ if (existsSync(path.join(root, 'package-lock.json'))) {
 }
 
 // README.md, package.json, and the lockfile root are the release-version surfaces.
-// Nothing else is gated: the build-time handover log is disposable by design, so no gate
-// may ever require its presence.
 for (const file of ['README.md']) {
   const found = markerVersion(file);
   if (!found) errors.push(`${file} missing **Version:** vX.Y.Z marker`);

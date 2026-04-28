@@ -41,7 +41,7 @@ export function SecurityReadout({ params }: { params: Params }) {
         </div>
       </dl>
       <p className="mono">
-        This build samples β, γ, α, ζ, ρ and every FRI fold challenge in Fp², and exposes an
+        The protocol samples β, γ, α, ζ, ρ and every FRI fold challenge in Fp², and exposes an
         optional SHA-256 work factor before query derivation. The combined estimate remains
         teaching-scale and conjectured, not a production-security claim.
       </p>

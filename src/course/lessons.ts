@@ -1,4 +1,4 @@
-/** Phase 2 course-mode lessons. The player remains the source of live data. */
+/** Guided course lessons. The player remains the source of live data. */
 export interface Lesson {
   id: string;
   title: string;

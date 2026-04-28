@@ -47,7 +47,7 @@ export function CourseMode({ onOpenLesson, activeLessonId }: CourseModeProps) {
     <section className="course-mode" aria-labelledby="course-title">
       <div className="course-heading">
         <div>
-          <p className="eyebrow">Phase 2 + 3 · course mode</p>
+          <p className="eyebrow">Guided course</p>
           <h2 id="course-title">Ten stops from claim to verified proof</h2>
         </div>
         <button type="button" onClick={() => setOpen((value) => !value)}>

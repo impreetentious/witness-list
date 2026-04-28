@@ -2,6 +2,7 @@ logs
 *.log
 npm-debug.log*
 node_modules
+/.npm/
 /.next/
 /out/
 coverage
@@ -17,7 +18,6 @@ coverage
 *.tsbuildinfo
 next-env.d.ts
 CLAUDE.md
-AGENTS.md
 .vscode/*
 !.vscode/extensions.json
 .idea
