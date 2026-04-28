@@ -2,7 +2,7 @@
   "name": "witness-list",
   "private": true,
   "type": "module",
-  "version": "0.9.9",
+  "version": "0.9.10",
   "description": "Witness List — a zero-knowledge proof workshop. Build a claim, prove it, try to cheat.",
   "license": "MIT",
   "repository": {
@@ -53,7 +53,7 @@
   "devDependencies": {
     "@axe-core/playwright": "^4.11.1",
     "@playwright/test": "^1.58.2",
-    "@types/node": "^24.10.13",
+    "@types/node": "^24.10.15",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "fast-check": "^4.5.3",

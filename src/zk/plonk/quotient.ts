@@ -1,7 +1,7 @@
 /**
  * Constraint composition C(x) and quotient t = C / Z_H with exact-division check —
  * the pedagogical heart: nonzero remainder rows ARE "the equation that catches you".
- * docs/PROTOCOL-SPEC.md §4.4. M4. Gate Z6.
+ * docs/PROTOCOL-SPEC.md §4.4. Gate Z6.
  */
 import { add, mul, neg, sub, twoAdicRoot } from '../field';
 import type { Fp } from '../field';
@@ -41,8 +41,8 @@ export interface CommittedPolynomials {
 
 /**
  * Compose the PLONK gate, copy-transition, and boundary relations directly on
- * H, then interpolate C. This is M4 foundation work only — it is unsound
- * without the later low-degree commitments and FRI checks (docs/PROTOCOL-SPEC.md §4.4).
+ * H, then interpolate C. The identity alone is unsound without the low-degree
+ * commitments and FRI checks (docs/PROTOCOL-SPEC.md §4.4).
  */
 export function composeConstraints(
   circuit: CompiledCircuit,

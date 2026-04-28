@@ -1,6 +1,6 @@
 /**
  * Fiat–Shamir transcript: SHA-256 hash chain, domain-separated labels,
- * rejection-sampled field draws, logged for the timeline UI. docs/PROTOCOL-SPEC.md §4.9. M2.
+ * rejection-sampled field draws, logged for the timeline UI. docs/PROTOCOL-SPEC.md §4.9.
  * Gate Z10 freezes the byte format via a golden proof fixture.
  */
 import { P } from './field';

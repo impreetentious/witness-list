@@ -1,7 +1,7 @@
 /**
  * Zero-knowledge mode: blinding insertion (add Z_H·r to committed polys,
  * deg r = QUERIES+1) and the transcript simulator for the ZK tab.
- * docs/PROTOCOL-SPEC.md §4.10. M8. Gate Z13.
+ * docs/PROTOCOL-SPEC.md §4.10. Gate Z13.
  * Wording is load-bearing — keep this exact label on the simulator surface:
  * illustration of the ZK definition, not a formal proof
  */

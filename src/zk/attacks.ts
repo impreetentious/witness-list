@@ -1,6 +1,6 @@
 /**
  * The three canned malicious provers — shared verbatim between the cheat-mode UI
- * and the negative test suite (Z9): the demo IS the test. docs/PROTOCOL-SPEC.md §6.3. M5.
+ * and the negative test suite (Z9): the demo is the test. docs/PROTOCOL-SPEC.md §6.3.
  *
  * A1 tamperWitness  -> caught by V2 (identity at ζ) — after the stage-8 remainder banner
  * A2 tamperLeaf     -> caught by V3 (Merkle path) at a specific query
@@ -28,7 +28,7 @@ import {
 import { buildFri, deepCompositionAt, domainPoint, interpolateCoset } from './fri/fri';
 import { verify } from './plonk/verify';
 
-export const A3_BLOWUP = 8;
+const A3_BLOWUP = 8;
 
 export async function tamperWitness(
   circuit: Circuit,
