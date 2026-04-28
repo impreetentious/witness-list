@@ -44,8 +44,8 @@ export function domainPoint(index: number, length: number, shift: Fp = GENERATOR
 }
 
 /** fold: L' (x²) = (L(x)+L(−x))/2 + β·(L(x)−L(−x))/(2x) — docs/PROTOCOL-SPEC.md §4.7 */
-export function foldLayer(_layer: Fp[], _beta: Fp, _domainShift: Fp): Fp[] {
-  const { length } = _layer;
+export function foldLayer(layer: Fp[], beta: Fp, domainShift: Fp): Fp[] {
+  const { length } = layer;
   if (length < 2 || (length & (length - 1)) !== 0) {
     throw new Error('FRI fold needs an even power-of-two layer');
   }
@@ -53,13 +53,13 @@ export function foldLayer(_layer: Fp[], _beta: Fp, _domainShift: Fp): Fp[] {
   const omega = twoAdicRoot(Math.log2(length));
   const inverseTwo = inv(2n);
   const folded = Array.from<Fp>({ length: half }).fill(0n);
-  let x = _domainShift;
+  let x = domainShift;
   for (let index = 0; index < half; index++) {
-    const atX = _layer[index]!;
-    const atNegativeX = _layer[index + half]!;
+    const atX = layer[index]!;
+    const atNegativeX = layer[index + half]!;
     const even = mul(add(atX, atNegativeX), inverseTwo);
     const odd = mul(mul(sub(atX, atNegativeX), inverseTwo), inv(x));
-    folded[index] = add(even, mul(_beta, odd));
+    folded[index] = add(even, mul(beta, odd));
     x = mul(x, omega);
   }
   return folded;

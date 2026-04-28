@@ -179,14 +179,18 @@ export function composeConstraintsFp2(
     const f = embedPoly(fBase);
     const table = embedPoly(interpolate(circuit.lookupTable));
     const omega = twoAdicRoot(Math.log2(circuit.n));
-    const rotateBase = (poly: Poly): Fp2Poly =>
-      embedPoly(
-        poly.map((coefficient, index) => {
-          let power = 1n;
-          for (let i = 0; i < index; i++) power = mulBase(power, omega);
-          return mulBase(coefficient, power);
+    // Accumulate ω^index rather than recomputing it per coefficient — the same
+    // shape as rotateFp2, and O(n) instead of O(n²) on a table-sized circuit.
+    const rotateBase = (poly: Poly): Fp2Poly => {
+      let power = 1n;
+      return embedPoly(
+        poly.map((coefficient) => {
+          const rotated = mulBase(coefficient, power);
+          power = mulBase(power, omega);
+          return rotated;
         }),
       );
+    };
     let lookupNumerator: Fp2Poly;
     let lookupDenominator: Fp2Poly;
     if (circuit.lookupMode === 'multiset') {

@@ -8,6 +8,11 @@ export class PresetBuilder {
   private nextId = 1;
   private readonly gates: Gate[] = [];
 
+  /** Gates emitted so far, so a lowerer can stop before it passes the trace cap. */
+  public get size(): number {
+    return this.gates.length;
+  }
+
   public gate(op: GateOp, inputs: number[] = [], value?: bigint): number {
     const id = this.nextId++;
     const pos = { x: 40 + ((id - 1) % 8) * 140, y: 40 + Math.floor((id - 1) / 8) * 100 };

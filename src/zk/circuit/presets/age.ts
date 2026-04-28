@@ -6,8 +6,6 @@ import { PresetBuilder } from './builder';
 export interface AgePreset {
   circuit: Circuit;
   ageWire: number;
-  /** Retained for caller compatibility; v2 lookup ranges need no auxiliary bits. */
-  bitWires: number[];
 }
 
 function buildAge(): AgePreset {
@@ -15,7 +13,7 @@ function buildAge(): AgePreset {
   const ageWire = builder.priv();
   builder.lookup(ageWire);
   const lookupTable = Array.from({ length: 128 }, (_, offset) => BigInt(18 + offset));
-  return { circuit: builder.build('Age over 18', [], lookupTable), ageWire, bitWires: [] };
+  return { circuit: builder.build('Age over 18', [], lookupTable), ageWire };
 }
 
 export const agePreset = buildAge();

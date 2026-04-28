@@ -55,8 +55,9 @@ export function inv(a: Fp): Fp {
 }
 
 /**
- * Montgomery batch inversion — one inv + 3(n−1) muls.
- * Used for DEEP quotient denominators (docs/PROTOCOL-SPEC.md §4.6 round 5).
+ * Montgomery batch inversion — one inv + 3(n−1) muls. Part of the field API in
+ * docs/PROTOCOL-SPEC.md §4.1; the prover and verifier invert pointwise today, so
+ * this is a gate-tested utility rather than a hot-path dependency.
  */
 export function batchInverse(xs: readonly Fp[]): Fp[] {
   const n = xs.length;

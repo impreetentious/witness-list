@@ -33,7 +33,7 @@ export function SecurityReadout({ params }: { params: Params }) {
         </div>
         <div>
           <dt>challenge grinding</dt>
-          <dd>{grindingBits === 0 ? 'off' : `2⁻${grindingBits} post-commitment work per proof`}</dd>
+          <dd>{grindingBits === 0 ? 'off' : `2^${grindingBits} post-commitment work per proof`}</dd>
         </div>
         <div>
           <dt>index bias</dt>

@@ -1,4 +1,8 @@
-/** docs/PROTOCOL-SPEC.md §12 / 2D — Prover-side Poseidon Merkle tree for workshop-scale field leaves. */
+/**
+ * docs/PROTOCOL-SPEC.md §12 — Optional Poseidon Merkle tree over workshop-scale
+ * field leaves. It is a gate-tested kernel component (Z16), not part of the
+ * shipped proof path: commitments there are the SHA-256 trees in merkle.ts.
+ */
 import type { Fp } from './field';
 import { poseidonHash } from './poseidon';
 

@@ -982,6 +982,29 @@ describe('Z17: Witness Script', () => {
     );
   });
 
+  it('refuses bounds that would unroll past the workshop trace limit', async () => {
+    // The editor compiles on idle, on the main thread, so an unbounded unroll has
+    // to fail as a diagnostic rather than as a frozen page.
+    await expect(
+      compileWitnessScript(
+        'claim Runaway { private x: field; for i in 0..200000 { assert x == x; } }',
+      ),
+    ).rejects.toThrow(WitnessScriptError);
+    await expect(
+      compileWitnessScript(
+        'claim EmptyRunaway { private x: field; for i in 0..900000000 { } assert x == x; }',
+      ),
+    ).rejects.toThrow(/iterations/);
+    await expect(
+      compileWitnessScript(
+        'claim NestedRunaway { private x: field; for i in 0..100000 { for j in 0..100000 { } } assert x == x; }',
+      ),
+    ).rejects.toThrow(/iterations/);
+    await expect(
+      compileWitnessScript('claim WideRange { private x: field; range x in 0..3000000; }'),
+    ).rejects.toThrow(/lookup table larger than/);
+  });
+
   it('reruns the shared negative attacks against a script-authored circuit', async () => {
     const script = await compileWitnessScript(witnessScriptExamples[0]!.source);
     const inputs = script.deriveInputs(witnessScriptExamples[0]!.inputs);

@@ -18,7 +18,7 @@ ZK today is either hand-wavy cave metaphors or production libraries with opaque 
 - **See the zero** — a ZK tab with a ledger of every byte the verifier receives, and a side-by-side simulated transcript generated _without_ the witness.
 - **Share proofs** — the URL carries circuit, public inputs, and proof; the recipient's browser verifies locally. No accounts, no server.
 - **Author claims** — CodeMirror-backed Witness Script provides syntax highlighting, compile-on-idle diagnostics, canonical formatting, bounded loops/ranges, and MiMC/Poseidon/Merkle standard-library calls.
-- **Learn the arc** — ten locally persisted lessons, a proof-size breakdown, a 200-replay blinding histogram, and an optional Poseidon Merkle tree make the later protocol ideas inspectable too.
+- **Learn the arc** — ten locally persisted lessons, a proof-size breakdown, a 200-replay blinding histogram, and an in-circuit Poseidon Merkle membership claim in the script gallery make the later protocol ideas inspectable too.
 
 ## Honesty, stated plainly
 
@@ -91,4 +91,4 @@ MIT — see [LICENSE](./LICENSE).
 
 ---
 
-**Version:** v0.9.10
+**Version:** v0.10.0

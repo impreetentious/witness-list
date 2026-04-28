@@ -9,6 +9,7 @@
  * workshop Poseidon permutation; no recursion or unbounded loop exists.
  */
 import type { Circuit } from '../zk/circuit/ir';
+import { MAX_TRACE_ROWS } from '../zk/circuit/compile';
 import { mimcConstant } from '../zk/circuit/presets/mimc';
 import { PresetBuilder } from '../zk/circuit/presets/builder';
 import {
@@ -362,6 +363,34 @@ class Lowerer {
   private readonly inputs = new Map<string, number>();
   private readonly ranges: RangeDerivation[] = [];
   private readonly constants = new Map<bigint, number>();
+  private iterations = 0;
+
+  /**
+   * The circuit compiler caps a workshop trace at MAX_TRACE_ROWS rows. Applying
+   * the same cap while lowering turns a runaway bound into a diagnostic with a
+   * source span: the editor compiles on idle, on the main thread, so an
+   * unbounded unroll would otherwise freeze the page long before the compiler
+   * could reject the circuit it produced.
+   */
+  private assertWithinTraceBudget(token: Token): void {
+    if (this.builder.size > MAX_TRACE_ROWS)
+      throw new WitnessScriptError(
+        `This claim lowers to more than ${MAX_TRACE_ROWS} circuit gates, past the workshop trace limit. Reduce a loop or range bound.`,
+        token.start,
+        token.end,
+      );
+  }
+
+  /** Bounds nested unrolling, which can outrun the gate budget on empty bodies. */
+  private countIteration(token: Token): void {
+    this.iterations++;
+    if (this.iterations > MAX_TRACE_ROWS)
+      throw new WitnessScriptError(
+        `Loop unrolling passes ${MAX_TRACE_ROWS} iterations, past the workshop trace limit. Reduce a loop bound.`,
+        token.start,
+        token.end,
+      );
+  }
 
   private constant(value: bigint): number {
     const cached = this.constants.get(value);
@@ -511,6 +540,13 @@ class Lowerer {
         statement.token.start,
         statement.token.end,
       );
+    const tableSize = statement.upper - statement.lower + 1;
+    if (tableSize > MAX_TRACE_ROWS)
+      throw new WitnessScriptError(
+        `A range of ${tableSize} values needs a fixed lookup table larger than the ${MAX_TRACE_ROWS}-row workshop trace limit.`,
+        statement.token.start,
+        statement.token.end,
+      );
     this.builder.lookup(source);
     this.ranges.push({
       sourceName: statement.name,
@@ -524,6 +560,7 @@ class Lowerer {
     loopValues: ReadonlyMap<string, number>,
   ): Promise<void> {
     for (const statement of statements) {
+      this.assertWithinTraceBudget(statement.token);
       if (statement.kind === 'input') {
         if (loopValues.size > 0)
           throw new WitnessScriptError(
@@ -566,6 +603,7 @@ class Lowerer {
         continue;
       }
       for (let value = statement.lower; value <= statement.upper; value++) {
+        this.countIteration(statement.token);
         const nested = new Map(loopValues);
         nested.set(statement.name, value);
         await this.lowerStatements(statement.body, nested);
