@@ -1,3 +1,5 @@
+# Independent reference implementation. It exists to disagree with the TypeScript prover,
+# so it must never import from it.
 #!/usr/bin/env python3
 """Independent reference implementation for cross-checking fixtures.
 

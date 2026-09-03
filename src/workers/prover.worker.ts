@@ -44,6 +44,12 @@ async function handle(request: WorkerRequest): Promise<WorkerResponse> {
       inputs,
       request.weakQueries,
       request.maxAttempts,
+      (attempt, budget) =>
+        postMessage({
+          id: request.id,
+          kind: 'progress',
+          stage: `Forging query-fishing attempt ${attempt} of ${budget}…`,
+        } satisfies WorkerResponse),
     );
     return { id: request.id, kind: 'grind', ...result };
   }

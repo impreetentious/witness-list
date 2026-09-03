@@ -6,8 +6,7 @@ test('homepage browser performance stays inside budget', async ({ page }) => {
 
   const metrics = await page.evaluate(() => {
     const navigation = performance.getEntriesByType('navigation')[0] as
-      | PerformanceNavigationTiming
-      | undefined;
+      PerformanceNavigationTiming | undefined;
     return {
       domContentLoadedMs: navigation
         ? navigation.domContentLoadedEventEnd - navigation.startTime

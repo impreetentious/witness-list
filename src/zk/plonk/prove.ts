@@ -1,7 +1,8 @@
 /**
  * Full prover pipeline, rounds 0–5. docs/PROTOCOL-SPEC.md §4.6.
  * Emits ProofTrace (proof + bounded player payloads) from the worker.
- * M4 is EXPLICITLY UNSOUND ALONE (no low-degree test) — label it everywhere.
+ * The identity-only lesson path is EXPLICITLY UNSOUND ALONE (no low-degree
+ * test) — label it everywhere.
  */
 import type { Fp } from '../field';
 import type { CompiledCircuit, Witness } from '../circuit/compile';
@@ -14,6 +15,7 @@ import type { MerkleRoot, Params, ProofV1, ProofTrace } from '../types';
 import { composeConstraints, buildQuotient } from './quotient';
 import { omegaTimes, sigmaPolynomials, zetaIsInLdeCoset, zetaIsInTraceDomain } from './arithmetic';
 import { buildGrandProduct } from './permutation';
+import { hasLookups } from './lookup';
 import { buildFri, deepCompositionAt, domainPoint } from '../fri/fri';
 import { blind, seededFieldSource } from '../zkmode';
 import { friInitialDegreeBound, quotientChunkCount, quotientChunkLabel } from './chunks';
@@ -55,6 +57,10 @@ export async function proveV1ForCompatibility(
 ): Promise<ProofTrace> {
   if (!paramsAreSupported(params, circuit.n))
     throw new Error('proof parameters are outside the supported protocol range');
+  // Wire v1 has no lookup commitment or constraint term, so a v1 proof would
+  // silently drop the circuit's lookup gates. verifyV1 refuses the same pairing.
+  if (hasLookups(circuit))
+    throw new Error('protocol wire v1 cannot express a circuit with lookup gates');
   const transcript = createTranscript('witness-list/plonk-v1');
   await transcript.absorb('params', paramsBytes(params));
   await transcript.absorb('circuit-digest', circuit.digest);
@@ -224,7 +230,7 @@ function paramsBytes(params: Params): Uint8Array {
 
 function padded(coefficients: Fp[], n: number): Fp[] {
   if (coefficients.length > n)
-    throw new Error('M4 quotient chunk exceeds trace-domain degree bound');
+    throw new Error('identity-only quotient chunk exceeds trace-domain degree bound');
   return [...coefficients, ...Array<Fp>(n - coefficients.length).fill(0n)];
 }
 
@@ -304,23 +310,29 @@ async function squeezeZeta(
 }
 
 /**
- * M4 only: real rounds 0–4 and V2 opening data, but no DEEP/FRI low-degree
- * proof. It must never be accepted as a sound proof; verifyM4 says so in its
- * result and full verify() rejects the unavailable V3–V6 checks.
+ * Identity-only lesson: real rounds 0–4 and V2 opening data, but no DEEP/FRI
+ * low-degree proof. It must never be accepted as a sound proof;
+ * verifyIdentityOnly says so in its result and full verify() rejects the
+ * unavailable V3–V6 checks.
  */
-export async function proveM4(
+export async function proveIdentityOnly(
   circuit: CompiledCircuit,
   witness: Witness,
   publicInputs: Fp[],
   params: Params,
 ): Promise<ProofTrace> {
   if (!paramsAreSupported(params, circuit.n))
-    throw new Error('M4 proof parameters are outside the supported protocol range');
-  if (params.zk) throw new Error('M4 does not yet combine blinding with its unsound opening path');
+    throw new Error('identity-only proof parameters are outside the supported protocol range');
+  if (params.zk)
+    throw new Error(
+      'the identity-only path does not combine blinding with its unsound opening path',
+    );
   if ((params.grindingBits ?? 0) !== 0)
-    throw new Error('M4 has no FRI query phase in which to bind grinding work');
+    throw new Error('the identity-only path has no FRI query phase in which to bind grinding work');
+  if (hasLookups(circuit))
+    throw new Error('the identity-only path cannot express a circuit with lookup gates');
 
-  const transcript = createTranscript('witness-list/plonk-m4/unsound');
+  const transcript = createTranscript('witness-list/plonk-identity-only/unsound');
   await transcript.absorb('params', paramsBytes(params));
   await transcript.absorb('circuit-digest', circuit.digest);
   for (const input of publicInputs) await transcript.absorbFp('public-input', input);
@@ -344,7 +356,9 @@ export async function proveM4(
   const quotient = buildQuotient(composition.composed, circuit.n);
   if (!quotient.exact) {
     const rows = quotient.remainderOnH.flatMap((value, row) => (value === 0n ? [] : [row]));
-    throw new Error(`M4 constraint composition has nonzero remainder on rows ${rows.join(', ')}`);
+    throw new Error(
+      `identity-only constraint composition has nonzero remainder on rows ${rows.join(', ')}`,
+    );
   }
   const tRoots = await Promise.all([
     commitment(padded(quotient.tLo, circuit.n), params.blowup, 't-lo'),

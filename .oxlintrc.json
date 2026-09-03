@@ -1,5 +1,6 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
+  // Resolved from the installed package, so the schema always matches the pinned oxlint.
   // Deliberate scope: correctness/suspicious with React, a11y, TypeScript, and
   // import checks. Avoid `all`; style/pedantic rules such as sort-keys and
   // explicit return types are disproportionate noise for this app.

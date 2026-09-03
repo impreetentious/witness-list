@@ -4,6 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+// Every release-version surface is listed here; adding a new one means adding it here too.
 const read = (file) => readFileSync(path.join(root, file), 'utf8');
 const pkg = JSON.parse(read('package.json'));
 const version = pkg.version;

@@ -27,8 +27,8 @@ import { buildGrandProduct } from '../plonk/permutation';
 import { buildQuotient, composeConstraints } from '../plonk/quotient';
 import { foldLayer } from '../fri/fri';
 import { blind, simulateTranscript } from '../zkmode';
-import { prove, proveM4, proveV1ForCompatibility } from '../plonk/prove';
-import { verify, verifyM4 } from '../plonk/verify';
+import { prove, proveIdentityOnly, proveV1ForCompatibility } from '../plonk/prove';
+import { verify, verifyIdentityOnly } from '../plonk/verify';
 import { grindChallenge, sampleGrindingAttempts, tamperLeaf, tamperWitness } from '../attacks';
 import { decodeShare, encodeShare } from '../../share/codec';
 import {
@@ -430,9 +430,9 @@ describe('Protocol gates', () => {
     );
   });
 
-  it('M4 proves the ζ identity but full verification rejects its explicitly unsound no-FRI proof', async () => {
+  it('the identity-only path proves the ζ identity but full verification rejects its explicitly unsound no-FRI proof', async () => {
     const compiled = await compile(pythagorean);
-    const trace = await proveM4(
+    const trace = await proveIdentityOnly(
       compiled,
       generateWitness(
         pythagorean,
@@ -446,8 +446,9 @@ describe('Protocol gates', () => {
       { n: compiled.n, blowup: 8, queries: 32, zk: false },
     );
     expect(trace.quotientRemainder).toEqual(Array<Fp>(compiled.n).fill(0n));
-    if (trace.proof.version !== 1) throw new Error('M4 returned an unexpected protocol version');
-    const partial = await verifyM4(compiled, trace.proof);
+    if (trace.proof.version !== 1)
+      throw new Error('the identity-only path returned an unexpected protocol version');
+    const partial = await verifyIdentityOnly(compiled, trace.proof);
     expect(partial.ok).toBe(true);
     const full = await verify(compiled, trace.proof);
     expect(full.ok).toBe(false);
@@ -460,7 +461,8 @@ describe('Protocol gates', () => {
       ),
     };
     expect(
-      (await verifyM4(compiled, tamperedProof)).checks.find((check) => check.id === 'V2')?.ok,
+      (await verifyIdentityOnly(compiled, tamperedProof)).checks.find((check) => check.id === 'V2')
+        ?.ok,
     ).toBe(false);
   });
   it('a committed DEEP/FRI proof verifies V1–V7, while a changed leaf fails V3', async () => {
@@ -809,6 +811,31 @@ describe('Z15: quadratic extension challenges', () => {
     );
     expect(shared.proof.version).toBe(1);
     expect((await verify(await compile(shared.circuit), shared.proof)).ok).toBe(true);
+
+    // Compatibility must not become a soundness bypass: wire v1 has no lookup
+    // argument, so pairing a v1 proof with a lookup circuit would report V1-V7
+    // green while every lookup-constrained wire stayed unconstrained.
+    const ranged = await compileWitnessScript(
+      'claim RangedV1 {\n  private x: field;\n  range x in 0..3;\n}',
+    );
+    const lookupCircuit = await compile(ranged.circuit);
+    expect(lookupCircuit.n).toBe(compiled.n);
+    await expect(
+      proveV1ForCompatibility(
+        lookupCircuit,
+        generateWitness(ranged.circuit, ranged.deriveInputs({ x: 2n })),
+        [],
+        { n: lookupCircuit.n, blowup: 8, queries: 2, zk: false },
+        19,
+      ),
+    ).rejects.toThrow(/lookup gates/);
+    const paired = await verify(lookupCircuit, {
+      ...proof,
+      publicInputs: [],
+      circuitDigest: lookupCircuit.digest.slice(),
+    });
+    expect(paired.ok).toBe(false);
+    expect(paired.checks.find((check) => check.id === 'V7')?.ok).toBe(false);
   });
 });
 
@@ -967,6 +994,42 @@ describe('Z17: Witness Script', () => {
       );
     }
   });
+
+  it('seeds every declared input and bounds only the ranges it can check before proving', async () => {
+    // A freshly authored claim must be openable without the previously selected
+    // example's input names, and a ranged input must default inside its range.
+    const custom = await compileWitnessScript(
+      'claim Custom {\n  public total: field;\n  private p: field;\n  assert p * p == total;\n}',
+    );
+    expect(custom.defaultInputs).toEqual({ total: 0n, p: 0n });
+    expect([...custom.deriveInputs(custom.defaultInputs).values()]).toEqual([0n, 0n]);
+    const ranged = await compileWitnessScript(
+      'claim Ranged {\n  private years: field;\n  range years in 21..99;\n}',
+    );
+    expect(ranged.defaultInputs).toEqual({ years: 21n });
+    expect(ranged.deriveInputs(ranged.defaultInputs).size).toBe(1);
+    expect(() => ranged.deriveInputs({ years: 20n })).toThrow(/21\.\.99/);
+
+    // A range may target a let binding: it has no source value to pre-check, so
+    // the lookup gate is what enforces it — and it must actually do so.
+    const derived = await compileWitnessScript(
+      'claim LetRange {\n  private x: field;\n  let y = x + x;\n  range y in 0..15;\n}',
+    );
+    const circuit = await compile(derived.circuit);
+    const params = { n: circuit.n, blowup: 8, queries: 4, zk: false };
+    const inside = derived.deriveInputs({ x: 3n });
+    const honest = await prove(circuit, generateWitness(derived.circuit, inside), [], params, 5);
+    expect((await verify(circuit, honest.proof)).ok).toBe(true);
+    await expect(
+      prove(
+        circuit,
+        generateWitness(derived.circuit, derived.deriveInputs({ x: 9n })),
+        [],
+        params,
+        5,
+      ),
+    ).rejects.toThrow(/nonzero Fp² remainder/);
+  }, 30_000);
 
   it('supports bounded loop constants and reports source-local syntax errors', async () => {
     const source = `claim Loop {

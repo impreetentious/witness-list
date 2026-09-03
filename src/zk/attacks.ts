@@ -18,6 +18,7 @@ import type { Params, ProofTrace, ProofV1, QueryOpening, QueryOpeningV1 } from '
 import { compile, generateWitness } from './circuit/compile';
 import { proveForcedPastRemainder } from './plonk/prove';
 import { buildGrandProduct } from './plonk/permutation';
+import { hasLookups } from './plonk/lookup';
 import { buildQuotient, composeConstraints } from './plonk/quotient';
 import {
   omegaTimes,
@@ -168,6 +169,11 @@ async function createGrindingContext(
   const compiled = await compile(circuit);
   if (params.n !== compiled.n || params.zk)
     throw new Error('attack A3 needs an unblinded parameter set matching its circuit');
+  // A3 forges a protocol-v1 proof, and wire v1 has no lookup argument. Refusing
+  // here keeps the demo honest rather than reporting a forgery the shared
+  // verifier now rejects for a reason unrelated to query fishing.
+  if (hasLookups(compiled))
+    throw new Error('attack A3 needs a lookup-free claim: it forges a protocol-v1 proof');
   const publicInputs = circuit.publicOrder.map((wire) => {
     const value = inputs.get(wire);
     if (value === undefined) throw new Error(`attack A3 is missing public input wire ${wire}`);
@@ -359,6 +365,8 @@ export async function grindChallenge(
   inputs: Map<number, Fp>,
   weakQueries: number,
   maxAttempts: number,
+  /** Reports each forgery attempt as it starts, so callers can count them live. */
+  onAttempt?: (attempt: number, budget: number) => void,
 ): Promise<{ attempts: number; succeeded: boolean }> {
   if (!Number.isSafeInteger(weakQueries) || weakQueries < 1)
     throw new Error('attack A3 needs at least one query');
@@ -372,6 +380,7 @@ export async function grindChallenge(
     zk: false,
   });
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    onAttempt?.(attempt + 1, maxAttempts);
     const proof = await forgedGrindingProof(context, attempt);
     if ((await verify(context.circuit, proof)).ok)
       return { attempts: attempt + 1, succeeded: true };

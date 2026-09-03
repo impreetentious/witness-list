@@ -110,11 +110,20 @@ export function WitnessScriptEditor({ onUseScript }: WitnessScriptEditorProps) {
       view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: example.source } });
   }
 
+  /**
+   * Seed values for the inputs the *current* source declares. The selected
+   * example only contributes values whose names survived editing: carrying its
+   * whole input set through would make any freshly authored claim fail
+   * `deriveInputs` on a name the script no longer has.
+   */
   function exampleValues(result: CompiledWitnessScript): Record<string, bigint> {
     const example = witnessScriptExamples.find((candidate) => candidate.id === activeExample);
-    return example === undefined
-      ? Object.fromEntries([...result.inputs.keys()].map((name) => [name, 0n]))
-      : example.inputs;
+    return Object.fromEntries(
+      [...result.inputs.keys()].map((name) => [
+        name,
+        example?.inputs[name] ?? result.defaultInputs[name]!,
+      ]),
+    );
   }
 
   async function compileSource(useInWorkshop: boolean, automatic = false): Promise<void> {

@@ -353,6 +353,12 @@ export interface CompiledWitnessScript {
   circuit: Circuit;
   /** Source input names in proof/public-input order. */
   inputs: ReadonlyMap<string, number>;
+  /**
+   * A derivable value for every declared input: zero, or a ranged input's lower
+   * bound. Authoring surfaces need this to open a freshly written claim before
+   * the author has supplied values of their own.
+   */
+  defaultInputs: Readonly<Record<string, bigint>>;
   /** Maps source values to wires and validates lookup-range bounds. */
   deriveInputs(values: Readonly<Record<string, bigint>>): Map<number, bigint>;
 }
@@ -643,10 +649,17 @@ class Lowerer {
     };
     const inputs = new Map(this.inputs);
     const ranges = this.ranges.map((candidate) => ({ ...candidate }));
+    const defaultInputs = Object.fromEntries(
+      [...inputs.keys()].map((name) => [
+        name,
+        BigInt(ranges.find((candidate) => candidate.sourceName === name)?.lower ?? 0),
+      ]),
+    );
     return {
       program,
       circuit,
       inputs,
+      defaultInputs,
       deriveInputs(values: Readonly<Record<string, bigint>>): Map<number, bigint> {
         const result = new Map<number, bigint>();
         for (const [name, wire] of inputs) {
@@ -656,8 +669,12 @@ class Lowerer {
           result.set(wire, value);
         }
         for (const range of ranges) {
-          const value = values[range.sourceName];
-          if (value === undefined || value < BigInt(range.lower) || value > BigInt(range.upper)) {
+          // A range may target a let binding, whose value is computed inside the
+          // circuit and so has no source value to check here. Its lookup gate
+          // still constrains it, and an out-of-table value fails at proving time.
+          if (!inputs.has(range.sourceName)) continue;
+          const value = values[range.sourceName]!;
+          if (value < BigInt(range.lower) || value > BigInt(range.upper)) {
             throw new Error(`${range.sourceName} must be in ${range.lower}..${range.upper}.`);
           }
         }

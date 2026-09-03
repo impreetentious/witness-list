@@ -186,7 +186,7 @@ select {
 
 .structured-inputs,
 .security-readout,
-.m4-reference {
+.identity-reference {
   border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
   margin-top: 1.5rem;
   padding: 1.15rem 1.25rem;
@@ -285,7 +285,7 @@ select {
   opacity: 0.68;
 }
 
-.m4-preview {
+.identity-preview {
   width: min(100%, 46rem);
   margin-top: 2rem;
   border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
@@ -293,16 +293,16 @@ select {
   text-align: left;
 }
 
-.m4-preview h2,
-.m4-preview h3 {
+.identity-preview h2,
+.identity-preview h3 {
   margin: 0.25rem 0 0.75rem;
 }
 
-.m4-preview h2 {
+.identity-preview h2 {
   font-size: 1.25rem;
 }
 
-.m4-preview h3 {
+.identity-preview h3 {
   font-size: 0.875rem;
   font-family: var(--font-mono);
 }
@@ -315,7 +315,7 @@ select {
   text-transform: uppercase;
 }
 
-.m4-preview button {
+.identity-preview button {
   border: 0;
   background: var(--accent);
   color: white;
@@ -330,7 +330,7 @@ select {
   padding-left: 0.75rem;
 }
 
-.m4-preview button:disabled {
+.identity-preview button:disabled {
   cursor: progress;
   opacity: 0.65;
 }
@@ -507,7 +507,20 @@ select {
   color: var(--accent);
 }
 
-.gate-assert0 {
+/* docs/PROTOCOL-SPEC.md §5: public inputs carry an accent outline, private
+   inputs a dashed one, and terminal statements the fail-coloured border. */
+.gate-pub {
+  border-color: var(--accent);
+  border-width: 2px;
+}
+
+.gate-priv {
+  border-style: dashed;
+  border-width: 2px;
+}
+
+.gate-assert0,
+.gate-lookup {
   border-color: var(--fail);
 }
 
@@ -761,7 +774,7 @@ select {
   text-align: left;
 }
 
-.m4-reference {
+.identity-reference {
   margin: 0 auto 1.25rem;
   max-width: 78rem;
 }

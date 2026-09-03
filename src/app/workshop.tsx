@@ -39,6 +39,20 @@ type PresetId = 'pythagorean' | 'sudoku' | 'sudoku9' | 'mimc' | 'age' | 'canvas'
 /** Default FRI query count — matches docs/PROTOCOL-SPEC.md §4.7 / §4.11 teaching-scale readout. */
 const DEFAULT_QUERIES = 32;
 
+/**
+ * Bring the player into view for a lesson or stage deep link. Smooth scrolling
+ * is motion the visitor did not ask for, so it is dropped when the platform
+ * reports a reduced-motion preference.
+ */
+function revealPlayer(): void {
+  const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true;
+  window.requestAnimationFrame(() => {
+    document
+      .getElementById('protocol-player')
+      ?.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'start' });
+  });
+}
+
 function parseCourseDeepLink(hash: string): { lessonId?: string; stage?: number } {
   if (/^#p(u)?=/.test(hash)) return {};
   const lesson = /^#lesson=([\w-]+)$/.exec(hash);
@@ -184,11 +198,7 @@ export function Workshop() {
     if (writeHash && !/^#p(u)?=/.test(window.location.hash)) {
       window.history.replaceState(null, '', `#lesson=${lesson.id}`);
     }
-    window.requestAnimationFrame(() => {
-      document
-        .getElementById('protocol-player')
-        ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    });
+    revealPlayer();
   }
 
   function openStage(stage: number, writeHash = true): void {
@@ -199,11 +209,7 @@ export function Workshop() {
     if (writeHash && !/^#p(u)?=/.test(window.location.hash)) {
       window.history.replaceState(null, '', `#stage=${stage}`);
     }
-    window.requestAnimationFrame(() => {
-      document
-        .getElementById('protocol-player')
-        ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    });
+    revealPlayer();
   }
 
   useEffect(() => {
@@ -459,8 +465,9 @@ export function Workshop() {
     setShareStatus('Encoding proof URL…');
     setError(undefined);
     try {
+      const parsed = parseValues(session.values);
       const publicInputs = session.circuit.publicOrder.map((wire) => {
-        const value = parseValues(session.values).get(wire);
+        const value = parsed.get(wire);
         if (value === undefined) throw new Error(`missing public input wire ${wire}`);
         return value;
       });
@@ -471,11 +478,17 @@ export function Workshop() {
       });
       const url = `${window.location.href.split('#')[0]}${fragment}`;
       window.history.replaceState(null, '', fragment);
-      if (navigator.clipboard !== undefined) await navigator.clipboard.writeText(url);
+      // The fragment is already in the address bar, so a refused or missing
+      // clipboard is a downgrade, not a failure — reporting it as an encoding
+      // error would tell the visitor the share did not happen when it did.
+      const copied = await navigator.clipboard
+        ?.writeText(url)
+        .then(() => true)
+        .catch(() => false);
       setShareStatus(
-        navigator.clipboard === undefined
-          ? 'Verify-only fragment placed in this URL.'
-          : 'Verify-only proof URL copied to the clipboard.',
+        copied === true
+          ? 'Verify-only proof URL copied to the clipboard.'
+          : 'Verify-only fragment placed in this URL; copy it from the address bar.',
       );
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Could not encode this share URL.');

@@ -1,7 +1,8 @@
 /**
  * Z21 — honesty copy gate. Overclaiming is the one unforgivable bug:
  * scan load-bearing surfaces so "conjectured" / "teaching-scale" / the live
- * §4.11 formula / M4 unsound-alone / ZK illustration wording cannot regress silently.
+ * §4.11 formula / identity-only unsound-alone / ZK illustration wording cannot
+ * regress silently.
  */
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
@@ -34,7 +35,7 @@ describe('Z21: honesty copy cannot silently regress', () => {
   const workshop = read('src/app/workshop.tsx');
   const zkPanel = read('src/app/zk-panel.tsx');
   const page = read('src/app/page.tsx');
-  const m4 = read('src/app/m4-preview.tsx');
+  const identityPreview = read('src/app/identity-preview.tsx');
   const prove = read('src/zk/plonk/prove.ts');
   const zkmode = read('src/zk/zkmode.ts');
   const lessons = read('src/course/lessons.ts');
@@ -49,16 +50,16 @@ describe('Z21: honesty copy cannot silently regress', () => {
   it('keeps the live §4.11 readout formula shape beside the parameters', () => {
     // The formula must remain computed from live params, not a static disclaimer.
     expect(security).toMatch(
-      /ε ≈ max\(3n \/ \(p² − \|D\|\), \(1\/\{params\.blowup\}\)\^\{params\.queries\}, 2⁻³²\)/,
+      /ε ≈ max\(4n \/ \(p² − \|D\|\), \(1\/\{params\.blowup\}\)\^\{params\.queries\}, 2⁻³²\)/,
     );
     expect(security).toMatch(/params\.queries/);
     expect(security).toMatch(/params\.blowup/);
     expect(security).toMatch(/2⁻³²/);
   });
 
-  it('labels M4 unsound-alone wherever the M4 surface appears', () => {
+  it('labels the identity-only lesson unsound-alone wherever its surface appears', () => {
     expect(page).toMatch(/unsound alone/i);
-    expect(m4).toMatch(/Unsound alone/);
+    expect(identityPreview).toMatch(/Unsound alone/);
     expect(prove).toMatch(/UNSOUND ALONE/);
     expect(prove).toMatch(/unsound/);
   });

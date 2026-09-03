@@ -1,3 +1,4 @@
+// The home spec is the canary: if the export stops booting, every other check here is noise.
 import { expect, test } from '@playwright/test';
 
 test('homepage hydrates and proves in a worker under the deployed path', async ({ page }) => {

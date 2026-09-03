@@ -17,7 +17,7 @@ X-Content-Type-Options: nosniff
 X-Frame-Options: DENY
 Cross-Origin-Opener-Policy: same-origin
 Cross-Origin-Resource-Policy: same-origin
-Permissions-Policy: camera=(), geolocation=(), microphone=(), payment=(), usb=()
+Permissions-Policy: browsing-topics=(), camera=(), geolocation=(), microphone=(), payment=(), usb=()
 ```
 
 ## Why each non-obvious directive is what it is

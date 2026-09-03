@@ -4,7 +4,10 @@ import type { Params } from '@/zk/types';
 
 export function SecurityReadout({ params }: { params: Params }) {
   const ldeSize = params.n * params.blowup;
-  const zetaBits = (128 - Math.log2(3 * params.n)).toFixed(1);
+  // deg(C) is dominated by the copy-transition term Z(X)·numerator(X), which is
+  // four trace-degree factors — the same 4n the prover's quotient chunk layout
+  // budgets for. Blinding raises it further, so this stays a lower bound on ε.
+  const zetaBits = (128 - Math.log2(4 * params.n)).toFixed(1);
   const friBits = params.queries * Math.log2(params.blowup);
   const grindingBits = params.grindingBits ?? 0;
   return (
@@ -14,7 +17,7 @@ export function SecurityReadout({ params }: { params: Params }) {
         <strong>Conjectured teaching-scale bound</strong> — not a production-security claim.
       </p>
       <code>
-        ε ≈ max(3n / (p² − |D|), (1/{params.blowup})^{params.queries}, 2⁻³²)
+        ε ≈ max(4n / (p² − |D|), (1/{params.blowup})^{params.queries}, 2⁻³²)
       </code>
       <dl>
         <div>

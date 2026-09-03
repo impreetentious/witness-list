@@ -239,6 +239,30 @@ function decodeFp2(value: EncodedFp2): Fp2 {
   return fp2(decodeFp(value.c0), decodeFp(value.c1));
 }
 
+/**
+ * Proof parameters arrive from a URL like everything else here, so they get the
+ * same treatment as field elements and roots. `verify` re-checks them against
+ * the compiled circuit; this only guarantees the app never renders a shape it
+ * cannot reason about (an absent `n`, a negative query count) while reporting
+ * why a shared proof failed.
+ */
+function decodeParams(params: unknown): Proof['params'] {
+  const { n, blowup, queries, zk, grindingBits } = (params ?? {}) as Partial<Proof['params']>;
+  const positive = (value: unknown): value is number =>
+    typeof value === 'number' && Number.isSafeInteger(value) && value >= 1;
+  if (
+    !positive(n) ||
+    !positive(blowup) ||
+    !positive(queries) ||
+    typeof zk !== 'boolean' ||
+    (grindingBits !== undefined &&
+      (!Number.isSafeInteger(grindingBits) || grindingBits < 0 || grindingBits > 24))
+  ) {
+    throw new Error('share payload has invalid proof parameters');
+  }
+  return { n, blowup, queries, zk, ...(grindingBits === undefined ? {} : { grindingBits }) };
+}
+
 function decodeQueryV1(query: EncodedQueryV1): QueryOpeningV1 {
   if (!Number.isSafeInteger(query.index) || query.index < 0) throw new Error('invalid query index');
   return {
@@ -386,7 +410,7 @@ function decodePayload(encoded: EncodedPayload): SharePayload {
     encoded.proof.version === 1
       ? ({
           version: 1,
-          params: { ...encoded.proof.params },
+          params: decodeParams(encoded.proof.params),
           circuitDigest: base64UrlToBytes(encoded.proof.circuitDigest),
           publicInputs: encoded.proof.publicInputs.map(decodeFp),
           wiresRoot: decodeRoot(encoded.proof.wiresRoot),
@@ -405,7 +429,7 @@ function decodePayload(encoded: EncodedPayload): SharePayload {
         } satisfies ProofV1)
       : ({
           version: 2,
-          params: { ...encoded.proof.params },
+          params: decodeParams(encoded.proof.params),
           circuitDigest: base64UrlToBytes(encoded.proof.circuitDigest),
           publicInputs: encoded.proof.publicInputs.map(decodeFp),
           wiresRoot: decodeRoot(encoded.proof.wiresRoot),

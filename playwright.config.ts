@@ -4,6 +4,8 @@ const PORT = 3011;
 const BASE_PATH = (process.env.BASE_PATH ?? '').replace(/\/$/, '');
 const BASE_URL = `http://127.0.0.1:${PORT}${BASE_PATH}`;
 
+// End-to-end runs against the built export served by `serve`, not the dev server,
+// so the suite exercises the same bytes the host will publish.
 export default defineConfig({
   testDir: './tests/e2e',
   fullyParallel: false,

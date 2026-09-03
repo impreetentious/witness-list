@@ -23,6 +23,7 @@ import { deepCompositionAt, domainPoint, foldPair } from '../fri/fri';
 import { friInitialDegreeBound, quotientChunkCount, quotientChunkLabels } from './chunks';
 import { encodeGrindingNonce, verifyGrindingNonce } from '../grinding';
 import { verifyFp2 } from './verify-fp2';
+import { hasLookups } from './lookup';
 import { paramsAreSupported } from './params';
 
 function paramsBytes(proof: ProofV1): Uint8Array {
@@ -51,8 +52,11 @@ function unavailable(id: CheckResult['id'], detail: string): CheckResult {
   return { id, ok: false, detail };
 }
 
-/** Replay M4's transcript and check V1/V2/V7 without claiming FRI soundness. */
-export async function verifyM4(circuit: CompiledCircuit, proof: ProofV1): Promise<VerifyResult> {
+/** Replay the identity-only transcript and check V1/V2/V7 without claiming FRI soundness. */
+export async function verifyIdentityOnly(
+  circuit: CompiledCircuit,
+  proof: ProofV1,
+): Promise<VerifyResult> {
   const checks: CheckResult[] = [];
   const paramsOk =
     proof.version === 1 &&
@@ -63,8 +67,8 @@ export async function verifyM4(circuit: CompiledCircuit, proof: ProofV1): Promis
     id: 'V7',
     ok: paramsOk,
     detail: paramsOk
-      ? 'M4 parameters match the compiled circuit.'
-      : 'M4 parameters are invalid or unsupported.',
+      ? 'Identity-only parameters match the compiled circuit.'
+      : 'Identity-only parameters are invalid or unsupported.',
   });
   if (!paramsOk || !sameBytes(proof.circuitDigest, circuit.digest)) {
     checks.unshift({
@@ -80,7 +84,7 @@ export async function verifyM4(circuit: CompiledCircuit, proof: ProofV1): Promis
     return { ok: false, checks };
   }
 
-  const transcript = createTranscript('witness-list/plonk-m4/unsound');
+  const transcript = createTranscript('witness-list/plonk-identity-only/unsound');
   await transcript.absorb('params', paramsBytes(proof));
   await transcript.absorb('circuit-digest', circuit.digest);
   for (const input of proof.publicInputs) await transcript.absorbFp('public-input', input);
@@ -108,8 +112,8 @@ export async function verifyM4(circuit: CompiledCircuit, proof: ProofV1): Promis
     id: 'V1',
     ok: transcriptOk,
     detail: transcriptOk
-      ? 'Replayed the canonical M4 Fiat–Shamir transcript.'
-      : 'Missing a required M4 opening.',
+      ? 'Replayed the canonical identity-only Fiat–Shamir transcript.'
+      : 'Missing a required identity-only opening.',
   });
   if (!transcriptOk) {
     checks.splice(1, 0, {
@@ -159,8 +163,8 @@ export async function verifyM4(circuit: CompiledCircuit, proof: ProofV1): Promis
     id: 'V2',
     ok: identityOk,
     detail: identityOk
-      ? `M4 main identity holds at ζ: ${left} = ${right}.`
-      : `M4 main identity fails at ζ: ${left} ≠ ${right}.`,
+      ? `Identity-only main identity holds at ζ: ${left} = ${right}.`
+      : `Identity-only main identity fails at ζ: ${left} ≠ ${right}.`,
   });
   return { ok: checks.every((check) => check.ok), checks };
 }
@@ -206,9 +210,16 @@ async function verifyV1(circuit: CompiledCircuit, proof: ProofV1): Promise<Verif
       : Number.isSafeInteger(proof.grindingNonce) &&
         proof.grindingNonce! >= 0 &&
         proof.grindingNonce! <= 0xffffffff);
+  // Protocol wire v1 predates the lookup argument: it commits no h1/h2/Z_L and
+  // its identity below carries no lookup transition or boundary term. Verifying
+  // a v1 proof against a circuit that has lookup gates would therefore report
+  // V1-V7 green while leaving every lookup-constrained wire unconstrained, so
+  // the shape check refuses the pairing outright.
+  const lookupCircuit = hasLookups(circuit);
   const paramsOk =
     proof.version === 1 &&
     baseParamsOk &&
+    !lookupCircuit &&
     proof.publicInputs.length === circuit.publicRows &&
     proof.tRoots.length === expectedChunks &&
     proof.friLayerRoots.length === expectedRoots &&
@@ -223,7 +234,9 @@ async function verifyV1(circuit: CompiledCircuit, proof: ProofV1): Promise<Verif
     ok: paramsOk,
     detail: paramsOk
       ? 'Parameters and FRI shape match the compiled circuit.'
-      : 'Parameters, field encoding, or FRI shape are invalid.',
+      : lookupCircuit
+        ? 'Protocol wire v1 carries no lookup argument, so it cannot verify a circuit with lookup gates.'
+        : 'Parameters, field encoding, or FRI shape are invalid.',
   };
   if (!paramsOk || !sameBytes(proof.circuitDigest, circuit.digest)) {
     return {
@@ -232,7 +245,9 @@ async function verifyV1(circuit: CompiledCircuit, proof: ProofV1): Promise<Verif
         {
           id: 'V1',
           ok: false,
-          detail: 'Transcript replay cannot start: circuit digest or parameters differ.',
+          detail: lookupCircuit
+            ? 'Transcript replay cannot start: this circuit uses lookup gates, which protocol wire v1 cannot express.'
+            : 'Transcript replay cannot start: circuit digest or parameters differ.',
         },
         {
           id: 'V2',

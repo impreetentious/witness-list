@@ -1,0 +1,17 @@
+# Line-ending policy. Everything checks out as LF on every platform, so a
+# Windows clone cannot rewrite text files to CRLF. Exact-byte content — test
+# fixtures, lockfiles, generated artifacts — depends on this.
+* text=auto eol=lf
+
+# Generated — collapse these in review rather than reading the diff
+package-lock.json linguist-generated=true
+
+# Binary — never convert
+*.png binary
+*.ico binary
+*.woff2 binary
+*.docx binary
+*.xlsx binary
+*.tgz binary
+*.pdf binary
+*.zip binary
