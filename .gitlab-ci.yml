@@ -4,7 +4,7 @@
 # For a custom domain or user/group site, set BASE_PATH: '' below.
 
 # Pinned to the same image tag the GitHub workflow resolves from .nvmrc.
-image: node:22.22.2
+image: node:22.23.3
 
 cache:
   key:
