@@ -113,7 +113,7 @@ interface EncodedPayload {
 }
 
 const base64UrlAlphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
-const MAX_ENCODED_CHARACTERS = 4_000_000;
+export const MAX_ENCODED_CHARACTERS = 4_000_000;
 const MAX_DECOMPRESSED_BYTES = 8_000_000;
 
 function bytesToBase64Url(bytes: Uint8Array): string {
@@ -134,6 +134,7 @@ function bytesToBase64Url(bytes: Uint8Array): string {
 
 function base64UrlToBytes(value: string): Uint8Array {
   if (!/^[A-Za-z0-9_-]*$/.test(value)) throw new Error('share payload is not base64url');
+  if (value.length % 4 === 1) throw new Error('share payload has a truncated base64url group');
   const bytes: number[] = [];
   for (let index = 0; index < value.length; index += 4) {
     const a = base64UrlAlphabet.indexOf(value[index]!);
@@ -146,7 +147,10 @@ function base64UrlToBytes(value: string): Uint8Array {
     if (index + 2 < value.length) bytes.push(((b & 0x0f) << 4) | (c >> 2));
     if (index + 3 < value.length) bytes.push(((c & 0x03) << 6) | d);
   }
-  return Uint8Array.from(bytes);
+  const output = Uint8Array.from(bytes);
+  if (bytesToBase64Url(output) !== value)
+    throw new Error('share payload has noncanonical trailing bits');
+  return output;
 }
 
 function encodeRoot(root: MerkleRoot): string {
@@ -572,9 +576,13 @@ export async function encodeShare(payload: SharePayload, compressPayload = true)
   if (plain.byteLength > MAX_DECOMPRESSED_BYTES)
     throw new Error('share payload exceeds the size limit');
   const compressed = compressPayload ? await compress(plain) : undefined;
-  return compressed === undefined
-    ? `#pu=${bytesToBase64Url(plain)}`
-    : `#p=${bytesToBase64Url(compressed)}`;
+  const fragment =
+    compressed === undefined
+      ? `#pu=${bytesToBase64Url(plain)}`
+      : `#p=${bytesToBase64Url(compressed)}`;
+  if (fragment.length > MAX_ENCODED_CHARACTERS)
+    throw new Error('encoded share payload exceeds the size limit');
+  return fragment;
 }
 
 export async function decodeShare(fragment: string): Promise<SharePayload> {
@@ -588,9 +596,36 @@ export async function decodeShare(fragment: string): Promise<SharePayload> {
     throw new Error('share payload exceeds the size limit');
   let encoded: unknown;
   try {
-    encoded = JSON.parse(new TextDecoder().decode(plain));
+    encoded = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(plain));
   } catch {
     throw new Error('share payload is not valid JSON');
   }
   return decodePayload(encoded as EncodedPayload);
+}
+
+/** The text file is exactly the existing ASCII fragment, without URL or whitespace. */
+export function decodeShareFileBytes(bytes: Uint8Array): Promise<SharePayload> {
+  if (bytes.byteLength > MAX_ENCODED_CHARACTERS)
+    return Promise.reject(new Error('Proof file exceeds the 4,000,000-byte limit.'));
+  if (bytes.some((byte) => byte > 127))
+    return Promise.reject(new Error('Proof file must contain an ASCII share fragment.'));
+  return decodeShare(new TextDecoder('utf-8', { fatal: true }).decode(bytes));
+}
+
+export function shareFileName(payload: SharePayload): string {
+  let name = Array.from(payload.circuit.name, (character) =>
+    character.charCodeAt(0) < 32 ||
+    character.charCodeAt(0) === 127 ||
+    /[<>:"/\\|?*]/.test(character)
+      ? '_'
+      : character,
+  )
+    .join('')
+    .replace(/[ .]+$/, '');
+  if (!name)
+    name = Array.from(payload.proof.circuitDigest, (byte) =>
+      byte.toString(16).padStart(2, '0'),
+    ).join('');
+  if (/^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(name)) name = `_${name}`;
+  return `${name}.txt`;
 }

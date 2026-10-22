@@ -2,7 +2,7 @@
   "name": "witness-list",
   "private": true,
   "type": "module",
-  "version": "0.10.2",
+  "version": "0.10.3",
   "description": "Witness List \u2014 a zero-knowledge proof workshop. Build a claim, prove it, try to cheat.",
   "license": "Apache-2.0",
   "repository": {

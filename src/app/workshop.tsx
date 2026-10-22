@@ -1,9 +1,16 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { CircuitCanvas } from '@/canvas/circuit-canvas';
 import { ProtocolPlayer } from '@/player/protocol-player';
-import { decodeShare, encodeShare } from '@/share/codec';
+import {
+  decodeShare,
+  decodeShareFileBytes,
+  encodeShare,
+  shareFileName,
+  MAX_ENCODED_CHARACTERS,
+  type SharePayload,
+} from '@/share/codec';
 import { tamperLeaf, tamperWitness } from '@/zk/attacks';
 import { compile } from '@/zk/circuit/compile';
 import type { Circuit, Gate } from '@/zk/circuit/ir';
@@ -188,9 +195,73 @@ export function Workshop() {
   const [focusStage, setFocusStage] = useState<number>();
   const [focusToken, setFocusToken] = useState(0);
   const [activeLessonId, setActiveLessonId] = useState<string>();
+  const generation = useRef(0);
+  const importGeneration = useRef(0);
+  const privateRevision = useRef(0);
+  const owner = useRef<{ token: number; controller: AbortController } | null>(null);
+  const artifact = useRef<{ payload: SharePayload; token: number; privateRevision: number } | null>(
+    null,
+  );
+  const ready = useRef(true);
+  const [shareAvailable, setShareAvailable] = useState(false);
+  function invalidate(recompile = false): number {
+    generation.current += 1;
+    owner.current?.controller.abort();
+    owner.current = null;
+    artifact.current = null;
+    if (recompile) ready.current = false;
+    setLoadingPreset(false);
+    setShareAvailable(false);
+    setTrace(undefined);
+    setChecks([]);
+    setProgress(undefined);
+    setRunning(false);
+    setShareStatus(undefined);
+    setAttackStatus(undefined);
+    setError(undefined);
+    setVerifyOnly(false);
+    return generation.current;
+  }
+  function begin(): { token: number; controller: AbortController } | null {
+    if (owner.current !== null) return null;
+    if (!ready.current) {
+      setError('Compile the current claim and finish deriving inputs before proving.');
+      return null;
+    }
+    const token = invalidate();
+    const request = { token, controller: new AbortController() };
+    owner.current = request;
+    setRunning(true);
+    return request;
+  }
+  function current(token: number): boolean {
+    return generation.current === token;
+  }
+  function finish(token: number): void {
+    if (!current(token)) return;
+    owner.current = null;
+    setRunning(false);
+    setProgress(undefined);
+  }
+  function cancel(): void {
+    invalidate();
+    setShareStatus('Cancelled. No proof was accepted; a fresh run is available.');
+  }
+  useEffect(
+    () => () => {
+      generation.current += 1;
+      importGeneration.current += 1;
+      owner.current?.controller.abort();
+      owner.current = null;
+      artifact.current = null;
+    },
+    [],
+  );
+
   const readoutParams: Params = { ...lastParams, queries, grindingBits, zk };
 
   function openLesson(lesson: Lesson, writeHash = true): void {
+    invalidate();
     setVerifyOnly(false);
     setFocusStage(lesson.stage);
     setFocusToken((token) => token + 1);
@@ -214,17 +285,26 @@ export function Workshop() {
 
   useEffect(() => {
     let cancelled = false;
+    const token = generation.current;
     async function loadSharedProof(): Promise<void> {
       if (/^#p(u)?=/.test(window.location.hash)) {
         try {
           const payload = await decodeShare(window.location.hash);
           const compiled = await compile(payload.circuit);
           const result = await verify(compiled, payload.proof);
-          if (cancelled) return;
+          if (cancelled || !current(token)) return;
+          if (!result.ok) {
+            setError(
+              'Rejected shared proof: local verification failed. The current workspace is preserved.',
+            );
+            return;
+          }
           const values = genericValues(payload.circuit);
           payload.circuit.publicOrder.forEach((wire, index) =>
             values.set(wire, payload.publicInputs[index]!.toString()),
           );
+          artifact.current = { payload, token, privateRevision: privateRevision.current };
+          setShareAvailable(true);
           setSession({
             id: 'canvas',
             title: `${payload.circuit.name} (shared)`,
@@ -246,7 +326,7 @@ export function Workshop() {
               : 'Verify-only mode: the shared proof failed its local verifier checklist.',
           );
         } catch (caught) {
-          if (!cancelled)
+          if (!cancelled && current(token))
             setError(
               caught instanceof Error
                 ? `Could not verify shared proof: ${caught.message}`
@@ -270,6 +350,9 @@ export function Workshop() {
   }, []);
 
   function updateValue(wire: number, value: string): void {
+    invalidate();
+    if (session.circuit.gates.some((gate) => gate.id === wire && gate.op === 'priv'))
+      privateRevision.current += 1;
     setSession((current) => ({ ...current, values: new Map(current.values).set(wire, value) }));
   }
 
@@ -278,6 +361,8 @@ export function Workshop() {
   }
 
   function updateScriptValue(name: string, value: string): void {
+    invalidate();
+    privateRevision.current += 1;
     if (!/^-?\d+$/.test(value.trim()) || session.script === undefined) return;
     try {
       const sourceValues = new Map(session.script.sourceValues).set(name, value);
@@ -303,8 +388,11 @@ export function Workshop() {
   }
 
   function useScript(compiled: CompiledWitnessScript, sourceValues: Record<string, bigint>): void {
+    invalidate();
     try {
-      setSession(scriptSession(compiled, sourceValues));
+      const next = scriptSession(compiled, sourceValues);
+      ready.current = true;
+      setSession(next);
       setTrace(undefined);
       setChecks([]);
       setError(undefined);
@@ -317,25 +405,34 @@ export function Workshop() {
   }
 
   async function choosePreset(id: Exclude<PresetId, 'canvas'>): Promise<void> {
+    const token = invalidate(true);
     setLoadingPreset(true);
     setError(undefined);
     try {
-      setSession(await loadPreset(id));
+      const next = await loadPreset(id);
+      if (!current(token)) return;
+      ready.current = true;
+      setSession(next);
       setTrace(undefined);
       setChecks([]);
       setAttackStatus(undefined);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Could not load this preset.');
+      if (current(token))
+        setError(caught instanceof Error ? caught.message : 'Could not load this preset.');
     } finally {
-      setLoadingPreset(false);
+      if (current(token)) setLoadingPreset(false);
     }
   }
 
   async function updateMimcPreimage(value: string): Promise<void> {
     updateValue(session.mimc?.preimage ?? -1, value);
+    ready.current = false;
     if (session.mimc === undefined || !/^\d+$/.test(value)) return;
+    const token = generation.current;
     try {
       const digest = await mimcHash(BigInt(value));
+      if (!current(token)) return;
+      ready.current = true;
       setSession((current) =>
         current.mimc === undefined
           ? current
@@ -350,40 +447,77 @@ export function Workshop() {
   }
 
   async function proveSelected(forceZk?: boolean): Promise<void> {
-    setRunning(true);
-    setError(undefined);
-    setAttackStatus(undefined);
-    setShareStatus(undefined);
+    const request = begin();
+    if (!request) return;
+    const { token, controller } = request;
+    const snapshot = {
+      circuit: structuredClone(session.circuit),
+      values: new Map(session.values),
+      privateRevision: privateRevision.current,
+      queries,
+      grindingBits,
+      zk: forceZk ?? zk,
+      seed,
+    };
     try {
-      const inputMap = parseValues(session.values);
-      const compiled = await compile(session.circuit);
-      const proofZk = forceZk ?? zk;
-      const params = { n: compiled.n, blowup: 8, queries, zk: proofZk, grindingBits };
+      const inputMap = parseValues(snapshot.values);
+      const compiled = await compile(snapshot.circuit);
+      if (!current(token)) return;
+      const params = {
+        n: compiled.n,
+        blowup: 8,
+        queries: snapshot.queries,
+        zk: snapshot.zk,
+        grindingBits: snapshot.grindingBits,
+      };
+      const result = await proveInWorker(
+        snapshot.circuit,
+        inputMap,
+        params,
+        snapshot.seed,
+        (stage) => {
+          if (current(token)) setProgress(stage);
+        },
+        controller.signal,
+      );
+      if (!current(token)) return;
       setLastParams(params);
-      const result = await proveInWorker(session.circuit, inputMap, params, seed, setProgress);
       setTrace(result.trace);
       setChecks(result.result.checks);
-      setProgress(undefined);
       if (!result.result.ok) {
         setError('The generated proof failed local verification. Inspect V1–V7 before sharing it.');
         return;
       }
-      setSeed((current) => current + 1);
+      artifact.current = {
+        token,
+        privateRevision: snapshot.privateRevision,
+        payload: {
+          circuit: snapshot.circuit,
+          publicInputs: result.trace.proof.publicInputs.slice(),
+          proof: result.trace.proof,
+        },
+      };
+      setShareAvailable(true);
+      setSeed((value) => value + 1);
       setShareStatus(
-        proofZk
+        snapshot.zk
           ? 'Blinded proof generated in a worker and verified locally. The ledger below describes its teaching-scale ZK surface.'
           : 'Unblinded proof generated in a worker and verified locally.',
       );
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Could not generate the proof.');
-      setProgress(undefined);
+      if (!current(token)) return;
+      if (caught instanceof Error && caught.name === 'AbortError')
+        setShareStatus('Cancelled. No proof accepted.');
+      else setError(caught instanceof Error ? caught.message : 'Could not generate the proof.');
     } finally {
-      setRunning(false);
+      finish(token);
     }
   }
 
   async function runTamperWitness(): Promise<void> {
-    setRunning(true);
+    const request = begin();
+    if (!request) return;
+    const token = request.token;
     setError(undefined);
     try {
       const target = session.circuit.gates.find((gate) => gate.op === 'add' || gate.op === 'mul');
@@ -391,6 +525,7 @@ export function Workshop() {
         throw new Error('This circuit has no arithmetic wire to tamper with.');
       const compiled = await compile(session.circuit);
       const params = { n: compiled.n, blowup: 8, queries, zk: false };
+      if (!current(token)) return;
       const attack = await tamperWitness(
         session.circuit,
         parseValues(session.values),
@@ -399,44 +534,54 @@ export function Workshop() {
         seed,
       );
       const result = await verify(compiled, attack.proof);
+      if (!current(token)) return;
       setTrace(attack);
       setChecks(result.checks);
       setAttackStatus(
         `A1 changed computed wire ${target.id} after witness generation. The exact nonzero quotient rows are highlighted in the trace table; V2 rejects the proof.`,
       );
     } catch (caught) {
+      if (!current(token)) return;
       setError(
         caught instanceof Error ? caught.message : 'Could not run the witness-tamper attack.',
       );
     } finally {
-      setRunning(false);
+      finish(token);
     }
   }
 
   async function runTamperLeaf(): Promise<void> {
     if (trace === undefined) return;
-    setRunning(true);
+    const capturedTrace = trace;
+    const request = begin();
+    if (!request) return;
+    const token = request.token;
     setError(undefined);
     try {
       const compiled = await compile(session.circuit);
-      const attack = tamperLeaf(trace, trace.proof.queries[0]!.index);
+      if (!current(token)) return;
+      const attack = tamperLeaf(capturedTrace, capturedTrace.proof.queries[0]!.index);
       const result = await verify(compiled, attack.proof);
+      if (!current(token)) return;
       setTrace(attack);
       setChecks(result.checks);
       setAttackStatus(
         'A2 edited an authenticated leaf after commitment. V3 names the failed Merkle opening.',
       );
     } catch (caught) {
+      if (!current(token)) return;
       setError(
         caught instanceof Error ? caught.message : 'Could not run the committed-leaf attack.',
       );
     } finally {
-      setRunning(false);
+      finish(token);
     }
   }
 
   async function runGrind(): Promise<void> {
-    setRunning(true);
+    const request = begin();
+    if (!request) return;
+    const { token, controller } = request;
     setError(undefined);
     try {
       const result = await grindInWorker(
@@ -444,8 +589,12 @@ export function Workshop() {
         parseValues(session.values),
         1,
         32,
-        setProgress,
+        (stage) => {
+          if (current(token)) setProgress(stage);
+        },
+        controller.signal,
       );
+      if (!current(token)) return;
       const workPerAttempt = 2 ** grindingBits;
       const projectedWork = result.attempts * workPerAttempt;
       setAttackStatus(
@@ -453,45 +602,95 @@ export function Workshop() {
       );
       setProgress(undefined);
     } catch (caught) {
+      if (!current(token)) return;
       setError(caught instanceof Error ? caught.message : 'Could not run the grinding demo.');
       setProgress(undefined);
     } finally {
-      setRunning(false);
+      finish(token);
     }
   }
 
-  async function share(): Promise<void> {
-    if (trace === undefined) return;
-    setShareStatus('Encoding proof URL…');
+  async function share(asFile = false): Promise<void> {
+    const selected = artifact.current;
+    if (!selected || !current(selected.token)) return;
+    setShareStatus(asFile ? 'Encoding public proof file…' : 'Encoding proof URL…');
     setError(undefined);
     try {
-      const parsed = parseValues(session.values);
-      const publicInputs = session.circuit.publicOrder.map((wire) => {
-        const value = parsed.get(wire);
-        if (value === undefined) throw new Error(`missing public input wire ${wire}`);
-        return value;
-      });
-      const fragment = await encodeShare({
-        circuit: session.circuit,
-        publicInputs,
-        proof: trace.proof,
-      });
+      const fragment = await encodeShare(selected.payload);
+      if (artifact.current !== selected || !current(selected.token)) return;
+      if (asFile) {
+        const url = URL.createObjectURL(new Blob([fragment], { type: 'text/plain;charset=utf-8' }));
+        const anchor = document.createElement('a');
+        anchor.href = url;
+        anchor.download = shareFileName(selected.payload);
+        anchor.click();
+        setTimeout(() => URL.revokeObjectURL(url), 0);
+        setShareStatus('Public proof downloaded. The URL is unchanged.');
+        return;
+      }
       const url = `${window.location.href.split('#')[0]}${fragment}`;
       window.history.replaceState(null, '', fragment);
-      // The fragment is already in the address bar, so a refused or missing
-      // clipboard is a downgrade, not a failure — reporting it as an encoding
-      // error would tell the visitor the share did not happen when it did.
       const copied = await navigator.clipboard
         ?.writeText(url)
         .then(() => true)
         .catch(() => false);
+      if (artifact.current !== selected || !current(selected.token)) return;
       setShareStatus(
         copied === true
           ? 'Verify-only proof URL copied to the clipboard.'
           : 'Verify-only fragment placed in this URL; copy it from the address bar.',
       );
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Could not encode this share URL.');
+      if (artifact.current === selected && current(selected.token))
+        setError(caught instanceof Error ? caught.message : 'Could not encode this public proof.');
+    }
+  }
+
+  async function importProof(file: File): Promise<void> {
+    // Candidate verification cannot cancel, change, or clear the active session on failure.
+    const token = generation.current;
+    const selection = ++importGeneration.current;
+    const selected = () => current(token) && selection === importGeneration.current;
+    try {
+      if (file.size > MAX_ENCODED_CHARACTERS)
+        throw new Error('Proof file exceeds the 4,000,000-byte limit.');
+      const payload = await decodeShareFileBytes(new Uint8Array(await file.arrayBuffer()));
+      const compiled = await compile(payload.circuit);
+      const result = await verify(compiled, payload.proof);
+      if (!selected()) return;
+      if (!result.ok) {
+        setError(
+          'Rejected proof import: local verification failed. The current workspace is preserved.',
+        );
+        return;
+      }
+      const nextToken = invalidate();
+      ready.current = true;
+      const values = genericValues(payload.circuit);
+      payload.circuit.publicOrder.forEach((wire, index) =>
+        values.set(wire, payload.publicInputs[index]!.toString()),
+      );
+      setSession({
+        id: 'canvas',
+        title: `${payload.circuit.name} (shared)`,
+        circuit: payload.circuit,
+        values,
+      });
+      setTrace({ proof: payload.proof, transcript: [], stages: {}, quotientRemainder: [] });
+      setChecks(result.checks);
+      setLastParams(payload.proof.params);
+      setVerifyOnly(true);
+      setFocusStage(15);
+      setFocusToken((value) => value + 1);
+      setActiveLessonId(undefined);
+      artifact.current = { payload, token: nextToken, privateRevision: privateRevision.current };
+      setShareAvailable(true);
+      setShareStatus(
+        'Verified public proof imported into a verify-only session. The URL is unchanged.',
+      );
+    } catch (caught) {
+      if (selected())
+        setError(caught instanceof Error ? caught.message : 'Proof import unavailable.');
     }
   }
 
@@ -515,7 +714,6 @@ export function Workshop() {
               key={id}
               type="button"
               className={session.id === id ? 'active' : ''}
-              disabled={loadingPreset}
               onClick={() => void choosePreset(id)}
             >
               {id === 'mimc'
@@ -532,7 +730,13 @@ export function Workshop() {
         </div>
         <label>
           FRI queries{' '}
-          <select value={queries} onChange={(event) => setQueries(Number(event.target.value))}>
+          <select
+            value={queries}
+            onChange={(event) => {
+              invalidate();
+              setQueries(Number(event.target.value));
+            }}
+          >
             <option value={4}>4</option>
             <option value={8}>8</option>
             <option value={16}>16</option>
@@ -543,7 +747,10 @@ export function Workshop() {
           anti-grinding{' '}
           <select
             value={grindingBits}
-            onChange={(event) => setGrindingBits(Number(event.target.value))}
+            onChange={(event) => {
+              invalidate();
+              setGrindingBits(Number(event.target.value));
+            }}
           >
             <option value={0}>off</option>
             <option value={4}>2⁴ work</option>
@@ -552,7 +759,14 @@ export function Workshop() {
           </select>
         </label>
         <label className="zk-toggle">
-          <input type="checkbox" checked={zk} onChange={(event) => setZk(event.target.checked)} />{' '}
+          <input
+            type="checkbox"
+            checked={zk}
+            onChange={(event) => {
+              invalidate();
+              setZk(event.target.checked);
+            }}
+          />{' '}
           blinded teaching mode
         </label>
       </section>
@@ -560,7 +774,13 @@ export function Workshop() {
       <div className="workshop-ide" aria-label="Workshop workbench">
         <aside className="workshop-pane workshop-pane-author" aria-label="Author pane">
           <p className="pane-label">Author</p>
-          <WitnessScriptEditor onUseScript={useScript} />
+          <WitnessScriptEditor
+            onUseScript={useScript}
+            onInvalidate={() => {
+              invalidate(true);
+            }}
+            getGeneration={() => generation.current}
+          />
           <CourseMode
             onOpenLesson={(lesson) => openLesson(lesson)}
             activeLessonId={activeLessonId}
@@ -577,7 +797,13 @@ export function Workshop() {
           <p className="pane-label">Circuit</p>
           <CircuitCanvas
             circuit={session.circuit}
+            onInvalidate={() => {
+              invalidate(true);
+            }}
+            getGeneration={() => generation.current}
             onUseCircuit={(circuit) => {
+              invalidate();
+              ready.current = true;
               setSession({
                 id: 'canvas',
                 title: circuit.name,
@@ -604,7 +830,34 @@ export function Workshop() {
               Worker: {progress}
             </p>
           )}
+          <div>
+            {running ? (
+              <button type="button" onClick={cancel}>
+                Cancel proving
+              </button>
+            ) : null}
+            <button
+              type="button"
+              disabled={!shareAvailable || running}
+              onClick={() => void share(true)}
+            >
+              Download public proof
+            </button>
+            <label>
+              Import public proof{' '}
+              <input
+                type="file"
+                accept=".txt,text/plain"
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  event.target.value = '';
+                  if (file) void importProof(file);
+                }}
+              />
+            </label>
+          </div>
           <ProtocolPlayer
+            shareAvailable={shareAvailable}
             trace={trace}
             checks={checks}
             running={running}
@@ -638,6 +891,7 @@ export function Workshop() {
           <ZkPanel
             trace={trace}
             onRunZk={() => {
+              if (owner.current !== null) return;
               setZk(true);
               void proveSelected(true);
             }}

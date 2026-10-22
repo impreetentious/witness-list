@@ -10,7 +10,7 @@ Then the part nothing else lets you do: **tamper with the witness and watch the 
 
 ZK today is either hand-wavy cave metaphors or production libraries with opaque internals. Witness List is the missing middle: **a real transparent proof system with glass walls.**
 
-## What you can do
+## What You Can DO
 
 - **Prove** — five preset claims with structured inputs (4×4 and multiset-backed 9×9 Sudoku grids, a hash preimage, a lookup-ranged age slider and a Pythagorean triple), or wire up your own circuit from the gate palette.
 - **Step through** — a 16-stage player from circuit to verifier checklist. The grand-product copy-constraint argument telescopes to 1 before your eyes. FRI folds halve the degree card by card.
@@ -31,7 +31,7 @@ Other boundaries, stated in the product as well as here:
 - No pairings, KZG or Groth16; no recursion or aggregation; no custom gates; circuits are bounded to roughly 2¹² rows.
 - Protocol-v1 proof links remain readable and verifiable for compatibility. Wire v1 predates the lookup argument, so it is refused for a circuit that uses lookup gates rather than verified without them.
 
-## Run it
+## Run It Locally
 
 Requires Node `>=22.23.3 <23` (see `.nvmrc`; `engine-strict` makes `npm ci` fail on a different version) and a browser with BigInt and Web Workers — the prover runs off the main thread.
 
@@ -95,4 +95,4 @@ Apache-2.0 © 2026 Sidakpreet Singh — see [LICENSE](LICENSE).
 
 ---
 
-**Version:** v0.10.2
+**Version:** v0.10.3

@@ -148,6 +148,7 @@ export interface ProtocolPlayerProps {
   focusToken?: number;
   onRun: () => void;
   onShare: () => void;
+  shareAvailable?: boolean;
   onAttackWitness: () => void;
   onAttackLeaf: () => void;
   onGrind: () => void;
@@ -183,6 +184,7 @@ export function ProtocolPlayer({
   focusToken = 0,
   onRun,
   onShare,
+  shareAvailable = false,
   onAttackWitness,
   onAttackLeaf,
   onGrind,
@@ -387,7 +389,7 @@ export function ProtocolPlayer({
         >
           Next
         </button>
-        <button type="button" onClick={onShare} disabled={trace === undefined}>
+        <button type="button" onClick={onShare} disabled={!shareAvailable || running}>
           Share Proof
         </button>
         <button type="button" onClick={onAttackWitness} disabled={running}>

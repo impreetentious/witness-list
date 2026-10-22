@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   addEdge,
   Background,
@@ -200,9 +200,33 @@ function canvasCircuit(nodes: GateNode[], edges: Edge[], template?: Circuit): Ci
 export interface CircuitCanvasProps {
   circuit?: Circuit;
   onUseCircuit?: (circuit: Circuit) => void;
+  onInvalidate?: () => void;
+  getGeneration?: () => number;
 }
 
-export function CircuitCanvas({ circuit = pythagorean, onUseCircuit }: CircuitCanvasProps) {
+export function CircuitCanvas({
+  circuit = pythagorean,
+  onUseCircuit,
+  onInvalidate,
+  getGeneration,
+}: CircuitCanvasProps) {
+  const compilationGeneration = useRef(0);
+  const onInvalidateRef = useRef(onInvalidate);
+  const getGenerationRef = useRef(getGeneration);
+  useEffect(() => {
+    onInvalidateRef.current = onInvalidate;
+    getGenerationRef.current = getGeneration;
+  }, [onInvalidate, getGeneration]);
+  function changed(): void {
+    compilationGeneration.current += 1;
+    onInvalidateRef.current?.();
+  }
+  useEffect(
+    () => () => {
+      compilationGeneration.current += 1;
+    },
+    [],
+  );
   const initial = fromCircuit(circuit);
   const [nodes, setNodes, onNodesChange] = useNodesState<GateNode>(initial.nodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>(initial.edges);
@@ -213,6 +237,7 @@ export function CircuitCanvas({ circuit = pythagorean, onUseCircuit }: CircuitCa
   );
 
   useEffect(() => {
+    compilationGeneration.current += 1;
     const next = fromCircuit(circuit);
     setNodes(next.nodes);
     setEdges(next.edges);
@@ -223,6 +248,7 @@ export function CircuitCanvas({ circuit = pythagorean, onUseCircuit }: CircuitCa
 
   const addGate = useCallback(
     (op: GateOp) => {
+      changed();
       setNodes((current) => {
         const highestId = current.reduce(
           (highest, node) => Math.max(highest, parseGateId(node.id)),
@@ -250,6 +276,7 @@ export function CircuitCanvas({ circuit = pythagorean, onUseCircuit }: CircuitCa
         connection.targetHandle === null
       )
         return;
+      changed();
       setEdges((current) =>
         addEdge(
           styleCopyEdge({
@@ -271,14 +298,20 @@ export function CircuitCanvas({ circuit = pythagorean, onUseCircuit }: CircuitCa
   const selectedConst = selected?.data.op === 'const' ? selected : undefined;
 
   const compileCanvas = useCallback(async () => {
+    const token = ++compilationGeneration.current;
+    const parentToken = getGenerationRef.current?.();
+    const current = () =>
+      token === compilationGeneration.current && parentToken === getGenerationRef.current?.();
     try {
       const nextCircuit = canvasCircuit(nodes, edges, lookupTemplate);
       const compiled = await compile(nextCircuit);
+      if (!current()) return;
       setCompileStatus(
         `Compiled ${compiled.rows.length} PLONK rows (n = ${compiled.n}); circuit digest is bound into the proof transcript.`,
       );
       onUseCircuit?.(nextCircuit);
     } catch (caught) {
+      if (!current()) return;
       setCompileStatus(
         caught instanceof Error ? caught.message : 'The canvas could not be compiled.',
       );
@@ -287,6 +320,7 @@ export function CircuitCanvas({ circuit = pythagorean, onUseCircuit }: CircuitCa
 
   const reset = useCallback(
     (preset: boolean) => {
+      changed();
       const next = preset
         ? fromCircuit(pythagorean)
         : { nodes: [] as GateNode[], edges: [] as Edge[] };
@@ -306,6 +340,7 @@ export function CircuitCanvas({ circuit = pythagorean, onUseCircuit }: CircuitCa
   const updateConstant = useCallback(
     (value: string) => {
       if (selectedConst === undefined) return;
+      changed();
       setNodes((current) =>
         current.map((node) =>
           node.id === selectedConst.id ? { ...node, data: { ...node.data, value } } : node,
@@ -364,8 +399,17 @@ export function CircuitCanvas({ circuit = pythagorean, onUseCircuit }: CircuitCa
             nodes={nodes}
             edges={coloredEdges}
             nodeTypes={nodeTypes}
-            onNodesChange={onNodesChange}
-            onEdgesChange={onEdgesChange}
+            onNodesChange={(changes) => {
+              if (
+                changes.some((change) => change.type !== 'select' && change.type !== 'dimensions')
+              )
+                changed();
+              onNodesChange(changes);
+            }}
+            onEdgesChange={(changes) => {
+              if (changes.some((change) => change.type !== 'select')) changed();
+              onEdgesChange(changes);
+            }}
             onConnect={onConnect}
             onNodeClick={(_, node) => setSelectedId(node.id)}
             onPaneClick={() => setSelectedId(undefined)}

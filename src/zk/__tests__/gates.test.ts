@@ -3,7 +3,8 @@
  * the independent Python implementation in tools/reference.py; every gate below
  * is executable in the node-only protocol suite.
  */
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { proveInWorker, grindInWorker } from '../../workers/prover-client';
 import fc from 'fast-check';
 import { P, add, batchInverse, inv, mod, mul, neg, pow, sub, twoAdicRoot } from '../field';
 import type { Fp } from '../field';
@@ -30,7 +31,7 @@ import { blind, simulateTranscript } from '../zkmode';
 import { prove, proveIdentityOnly, proveV1ForCompatibility } from '../plonk/prove';
 import { verify, verifyIdentityOnly } from '../plonk/verify';
 import { grindChallenge, sampleGrindingAttempts, tamperLeaf, tamperWitness } from '../attacks';
-import { decodeShare, encodeShare } from '../../share/codec';
+import { decodeShare, decodeShareFileBytes, encodeShare, shareFileName } from '../../share/codec';
 import {
   add as addFp2,
   embed,
@@ -1177,6 +1178,28 @@ describe('Zero-knowledge and sharing gates', () => {
     const fallback = await encodeShare(payload, false);
     expect(fallback.startsWith('#pu=')).toBe(true);
     expect(await decodeShare(fallback)).toEqual(payload);
+    expect(await decodeShareFileBytes(new TextEncoder().encode(fallback))).toEqual(payload);
+    await expect(decodeShareFileBytes(new TextEncoder().encode(fallback + '\n'))).rejects.toThrow();
+    await expect(decodeShareFileBytes(Uint8Array.of(239, 187, 191))).rejects.toThrow('ASCII');
+    await expect(decodeShareFileBytes(new Uint8Array(4_000_001))).rejects.toThrow('limit');
+    await expect(decodeShareFileBytes(new Uint8Array(4_000_000))).rejects.toThrow('share URL');
+    expect(shareFileName({ ...payload, circuit: { ...pythagorean, name: 'CON' } })).toBe(
+      '_CON.txt',
+    );
+    expect(shareFileName({ ...payload, circuit: { ...pythagorean, name: 'a/b\\c? .' } })).toBe(
+      'a_b_c_.txt',
+    );
+    expect(shareFileName({ ...payload, circuit: { ...pythagorean, name: ' .' } })).toMatch(
+      /^[a-f0-9]{64}\.txt$/,
+    );
+    const tampered = { ...payload, proof: { ...proof, wiresRoot: { bytes: new Uint8Array(32) } } };
+    const candidate = await decodeShareFileBytes(
+      new TextEncoder().encode(await encodeShare(tampered, false)),
+    );
+    expect((await verify(compiled, candidate.proof)).ok).toBe(false);
+    await expect(decodeShare('#pu=A')).rejects.toThrow('truncated');
+    await expect(decodeShare('#pu=AB')).rejects.toThrow('trailing bits');
+    await expect(decodeShare('#p=AAAA')).rejects.toThrow();
 
     const mismatched = JSON.parse(
       Buffer.from(fallback.slice('#pu='.length), 'base64url').toString('utf8'),
@@ -1264,5 +1287,80 @@ describe('Zero-knowledge and sharing gates', () => {
     );
     const fingerprint = Array.from(digest, (byte) => byte.toString(16).padStart(2, '0')).join('');
     expect(fingerprint).toBe('d3dcada69ffeeb2a314d658c7552594af45a059f9e5cad4ce45c21df4482b401');
+  });
+});
+
+describe('proof worker request ownership', () => {
+  class FakeWorker extends EventTarget {
+    static instances: FakeWorker[] = [];
+    static dispatchFails = false;
+    terminate = vi.fn();
+    postMessage = vi.fn(() => {
+      if (FakeWorker.dispatchFails) throw new Error('dispatch failed');
+    });
+    constructor() {
+      super();
+      FakeWorker.instances.push(this);
+    }
+    respond(data: unknown) {
+      this.dispatchEvent(new MessageEvent('message', { data }));
+    }
+  }
+  const params = { n: 32, blowup: 8, queries: 2, zk: false };
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    FakeWorker.instances = [];
+    FakeWorker.dispatchFails = false;
+  });
+  it('pre-aborted requests create no worker', async () => {
+    vi.stubGlobal('Worker', FakeWorker);
+    const controller = new AbortController();
+    controller.abort();
+    await expect(
+      proveInWorker(pythagorean, new Map(), params, 42, undefined, controller.signal),
+    ).rejects.toMatchObject({ name: 'AbortError' });
+    expect(FakeWorker.instances).toHaveLength(0);
+  });
+  it('cancels both proving and grinding exactly once and suppresses late progress/results', async () => {
+    vi.stubGlobal('Worker', FakeWorker);
+    for (const action of ['prove', 'grind']) {
+      const controller = new AbortController();
+      const progress = vi.fn();
+      const pending =
+        action === 'prove'
+          ? proveInWorker(pythagorean, new Map(), params, 42, progress, controller.signal)
+          : grindInWorker(pythagorean, new Map(), 1, 32, progress, controller.signal);
+      const worker = FakeWorker.instances.at(-1)!;
+      const rejected = expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+      controller.abort();
+      await rejected;
+      worker.respond({ id: 1, kind: 'progress', stage: 'late' });
+      worker.respond({ id: 1, kind: 'proof', trace: {}, result: { ok: true, checks: [] } });
+      controller.abort();
+      expect(progress).not.toHaveBeenCalled();
+      expect(worker.terminate).toHaveBeenCalledOnce();
+    }
+    const next = grindInWorker(pythagorean, new Map(), 1, 32);
+    FakeWorker.instances.at(-1)!.respond({ id: 1, kind: 'grind', attempts: 2, succeeded: true });
+    expect(await next).toMatchObject({ attempts: 2, succeeded: true });
+  });
+  it('releases the dedicated worker on dispatch, runtime, decode and terminal errors', async () => {
+    vi.stubGlobal('Worker', FakeWorker);
+    for (const mode of ['dispatch', 'error', 'messageerror', 'terminal', 'success']) {
+      FakeWorker.dispatchFails = mode === 'dispatch';
+      const pending = grindInWorker(pythagorean, new Map(), 1, 32);
+      const worker = FakeWorker.instances.at(-1)!;
+      const outcome =
+        mode === 'success'
+          ? expect(pending).resolves.toMatchObject({ attempts: 1 })
+          : expect(pending).rejects.toThrow();
+      if (mode === 'error') worker.dispatchEvent(new Event('error'));
+      if (mode === 'messageerror') worker.dispatchEvent(new Event('messageerror'));
+      if (mode === 'terminal') worker.respond({ id: 1, kind: 'error', message: 'failed' });
+      if (mode === 'success')
+        worker.respond({ id: 1, kind: 'grind', attempts: 1, succeeded: false });
+      await outcome;
+      expect(worker.terminate).toHaveBeenCalledOnce();
+    }
   });
 });

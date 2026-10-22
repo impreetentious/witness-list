@@ -16,6 +16,8 @@ import { witnessScriptExamples } from '@/script/examples';
 
 export interface WitnessScriptEditorProps {
   onUseScript: (compiled: CompiledWitnessScript, values: Record<string, bigint>) => void;
+  onInvalidate?: () => void;
+  getGeneration?: () => number;
 }
 
 const witnessScriptLanguage = StreamLanguage.define({
@@ -34,12 +36,19 @@ const witnessScriptLanguage = StreamLanguage.define({
   },
 });
 
-export function WitnessScriptEditor({ onUseScript }: WitnessScriptEditorProps) {
+export function WitnessScriptEditor({
+  onUseScript,
+  onInvalidate,
+  getGeneration,
+}: WitnessScriptEditorProps) {
   const initial = witnessScriptExamples[0]!;
   const host = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const sourceRef = useRef(initial.source);
   const onUseScriptRef = useRef(onUseScript);
+  const invalidateRef = useRef(onInvalidate);
+  const getGenerationRef = useRef(getGeneration);
+  const compilationGeneration = useRef(0);
   const [source, setSource] = useState(initial.source);
   const [activeExample, setActiveExample] = useState(initial.id);
   const [status, setStatus] = useState(
@@ -49,7 +58,9 @@ export function WitnessScriptEditor({ onUseScript }: WitnessScriptEditorProps) {
 
   useEffect(() => {
     onUseScriptRef.current = onUseScript;
-  }, [onUseScript]);
+    invalidateRef.current = onInvalidate;
+    getGenerationRef.current = getGeneration;
+  }, [onUseScript, onInvalidate, getGeneration]);
 
   useEffect(() => {
     if (host.current === null) return;
@@ -69,6 +80,8 @@ export function WitnessScriptEditor({ onUseScript }: WitnessScriptEditorProps) {
           EditorView.contentAttributes.of({ 'aria-label': 'Witness script source' }),
           EditorView.updateListener.of((update) => {
             if (!update.docChanged) return;
+            compilationGeneration.current += 1;
+            invalidateRef.current?.();
             const next = update.state.doc.toString();
             sourceRef.current = next;
             setSource(next);
@@ -83,13 +96,16 @@ export function WitnessScriptEditor({ onUseScript }: WitnessScriptEditorProps) {
     });
     viewRef.current = view;
     return () => {
+      compilationGeneration.current += 1;
       view.destroy();
       viewRef.current = null;
     };
   }, []);
 
   useEffect(() => {
+    const parentToken = getGenerationRef.current?.();
     const timer = window.setTimeout(() => {
+      if (parentToken !== getGenerationRef.current?.()) return;
       void compileSource(true, true);
     }, 450);
     return () => window.clearTimeout(timer);
@@ -100,6 +116,8 @@ export function WitnessScriptEditor({ onUseScript }: WitnessScriptEditorProps) {
   function loadExample(id: string): void {
     const example = witnessScriptExamples.find((candidate) => candidate.id === id);
     if (example === undefined) return;
+    compilationGeneration.current += 1;
+    invalidateRef.current?.();
     setActiveExample(id);
     sourceRef.current = example.source;
     setSource(example.source);
@@ -127,8 +145,13 @@ export function WitnessScriptEditor({ onUseScript }: WitnessScriptEditorProps) {
   }
 
   async function compileSource(useInWorkshop: boolean, automatic = false): Promise<void> {
+    const token = ++compilationGeneration.current;
+    const parentToken = getGenerationRef.current?.();
+    const current = () =>
+      token === compilationGeneration.current && parentToken === getGenerationRef.current?.();
     try {
       const result = await compileWitnessScript(sourceRef.current);
+      if (!current()) return;
       const values = exampleValues(result);
       result.deriveInputs(values);
       setCompiled(result);
@@ -137,6 +160,7 @@ export function WitnessScriptEditor({ onUseScript }: WitnessScriptEditorProps) {
       );
       if (useInWorkshop) onUseScriptRef.current(result, values);
     } catch (caught) {
+      if (!current()) return;
       setCompiled(undefined);
       if (caught instanceof WitnessScriptError) {
         const { start, end } = caught.diagnostic;
